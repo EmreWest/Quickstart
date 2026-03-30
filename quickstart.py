@@ -64,6 +64,11 @@ LOG_STATS_CACHE = {"mtime": None, "size": None, "stats": None}
 LOGSCAN_ANALYSIS_CACHE = {"mtime": None, "size": None, "data": None}
 KOMETA_CPU_CACHE = {}
 SYSTEM_CPU_CACHE = {"total": None, "idle": None}
+MAINTENANCE_STATE = {"paused": False, "paused_since": None, "active": False, "window": None, "queued_started_at": None}
+MAINTENANCE_STATE_LOCK = threading.Lock()
+MAINTENANCE_GUARD_INTERVAL = 45
+PENDING_KOMETA_START = {"command": None, "config_name": None, "requested_at": None}
+PENDING_KOMETA_START_LOCK = threading.Lock()
 
 VALIDATION_DOC_BASE = "/step/"
 VALIDATION_DOC_FALLBACK = "/step/900-final"
@@ -217,6 +222,309 @@ def _calculate_system_cpu_percent():
     busy = max(0.0, delta_total - delta_idle)
     percent = (busy / delta_total) * 100.0
     return max(0.0, min(100.0, percent))
+
+
+def _parse_maintenance_window_minutes(window_str):
+    if not window_str or "Unavailable" in str(window_str):
+        return None
+    matches = re.findall(r"(\d{1,2}):(\d{2})", str(window_str))
+    if len(matches) < 2:
+        return None
+    try:
+        start_h, start_m = (int(v) for v in matches[0])
+        end_h, end_m = (int(v) for v in matches[1])
+    except Exception:
+        return None
+    if not (0 <= start_h <= 23 and 0 <= end_h <= 23 and 0 <= start_m <= 59 and 0 <= end_m <= 59):
+        return None
+    return (start_h * 60 + start_m, end_h * 60 + end_m)
+
+
+def _is_within_maintenance_window(now_dt, start_min, end_min):
+    if start_min is None or end_min is None or start_min == end_min:
+        return False
+    now_min = now_dt.hour * 60 + now_dt.minute
+    if start_min < end_min:
+        return start_min <= now_min < end_min
+    return now_min >= start_min or now_min < end_min
+
+
+def _get_maintenance_window_from_db():
+    config_name = database.get_last_used_config_name()
+    if not config_name:
+        return None, None, None
+    try:
+        _validated, _user_entered, data = database.retrieve_section_data(name=config_name, section="plex_telemetry")
+        telemetry = data.get("plex_telemetry", {}) if isinstance(data, dict) else {}
+        window_str = telemetry.get("maintenance_window")
+        minutes = _parse_maintenance_window_minutes(window_str)
+        if not minutes:
+            return None, None, None
+        return minutes[0], minutes[1], window_str
+    except Exception as e:
+        helpers.ts_log(f"Failed to read Plex maintenance window: {e}", level="DEBUG")
+        return None, None, None
+
+
+def _get_plex_credentials_from_db():
+    config_name = database.get_last_used_config_name()
+    if not config_name:
+        return None, None
+    try:
+        _validated, _user_entered, data = database.retrieve_section_data(name=config_name, section="plex")
+        plex_data = data.get("plex", {}) if isinstance(data, dict) else {}
+        plex_url = plex_data.get("url") or plex_data.get("plex_url")
+        plex_token = plex_data.get("token") or plex_data.get("plex_token")
+        return plex_url, plex_token
+    except Exception as e:
+        helpers.ts_log(f"Failed to read Plex credentials: {e}", level="DEBUG")
+        return None, None
+
+
+def _get_maintenance_window_live():
+    plex_url, plex_token = _get_plex_credentials_from_db()
+    if not plex_url or not plex_token:
+        return None, None, None
+    start_hour, end_hour = helpers.get_plex_maintenance_hours(plex_url, plex_token)
+    if start_hour is None or end_hour is None:
+        return None, None, None
+    window_str = f"{start_hour:02d}:00 – {end_hour:02d}:00"
+    return start_hour * 60, end_hour * 60, window_str
+
+
+def _set_pending_kometa_start(command, config_name):
+    with PENDING_KOMETA_START_LOCK:
+        PENDING_KOMETA_START["command"] = command
+        PENDING_KOMETA_START["config_name"] = config_name
+        PENDING_KOMETA_START["requested_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _peek_pending_kometa_start():
+    with PENDING_KOMETA_START_LOCK:
+        if not PENDING_KOMETA_START.get("command"):
+            return None
+        return dict(PENDING_KOMETA_START)
+
+
+def _pop_pending_kometa_start():
+    with PENDING_KOMETA_START_LOCK:
+        if not PENDING_KOMETA_START.get("command"):
+            return None
+        pending = dict(PENDING_KOMETA_START)
+        PENDING_KOMETA_START["command"] = None
+        PENDING_KOMETA_START["config_name"] = None
+        PENDING_KOMETA_START["requested_at"] = None
+        return pending
+
+
+def _clear_pending_kometa_start():
+    with PENDING_KOMETA_START_LOCK:
+        PENDING_KOMETA_START["command"] = None
+        PENDING_KOMETA_START["config_name"] = None
+        PENDING_KOMETA_START["requested_at"] = None
+
+
+def _find_running_kometa_processes():
+    kometa_root = None
+    try:
+        kometa_root = str(helpers.get_kometa_root_path())
+    except Exception:
+        kometa_root = None
+    matches = []
+    for proc in psutil.process_iter(["pid", "cmdline", "create_time"]):
+        try:
+            cmdline = proc.info.get("cmdline") or []
+            joined = " ".join(cmdline)
+        except Exception:
+            continue
+        if "kometa.py" not in joined:
+            continue
+        has_root = bool(kometa_root and kometa_root in joined)
+        create_time = proc.info.get("create_time") or 0
+        matches.append((has_root, create_time, proc))
+    matches.sort(key=lambda item: (1 if item[0] else 0, item[1]), reverse=True)
+    return [entry[2] for entry in matches]
+
+
+def _find_running_kometa_process():
+    procs = _find_running_kometa_processes()
+    return procs[0] if procs else None
+
+
+def _stop_process_tree(proc):
+    try:
+        children = proc.children(recursive=True)
+    except Exception:
+        children = []
+    # Ensure suspended processes can receive signals
+    for target in [proc] + children:
+        try:
+            target.resume()
+        except Exception:
+            pass
+    for child in children:
+        try:
+            child.terminate()
+        except Exception:
+            pass
+    try:
+        proc.terminate()
+    except Exception:
+        pass
+    gone, alive = psutil.wait_procs([proc] + children, timeout=5)
+    if alive:
+        for target in alive:
+            try:
+                target.kill()
+            except Exception:
+                pass
+        _, alive = psutil.wait_procs(alive, timeout=3)
+    return alive
+
+
+def _launch_kometa_command(command, config_name=None):
+    if not command:
+        return False, "No command provided"
+
+    kometa_root = helpers.get_kometa_root_path()  # unified source of truth
+    is_win = sys.platform.startswith("win")
+    venv_python = kometa_root / "kometa-venv" / ("Scripts" if is_win else "bin") / ("python.exe" if is_win else "python3")
+    kometa_py = kometa_root / "kometa.py"
+
+    if not kometa_py.exists():
+        return False, f"kometa.py not found at: {kometa_py}"
+    if not venv_python.exists():
+        return False, f"Kometa venv python not found at: {venv_python}"
+
+    # Use posix=False so Windows backslashes/quotes are preserved
+    command_parts = shlex.split(command, posix=not is_win)
+
+    # Clean up double-wrapped args (affects --run-libraries, --times, etc.)
+    helpers.normalize_cli_args_inplace(command_parts)
+
+    # If the UI-built command already starts with python, replace it with our venv python
+    if command_parts and os.path.basename(command_parts[0]).lower() in {"python", "python3", "python.exe"}:
+        command_parts[0] = str(venv_python)
+    else:
+        command_parts.insert(0, str(venv_python))
+
+    # Make sure kometa.py is the script, even if the UI command omitted it
+    if not any(p.endswith("kometa.py") for p in command_parts):
+        command_parts.insert(1, str(kometa_py))
+
+    helpers.normalize_flag_values(command_parts)
+
+    config_path = _extract_kometa_config_path(command_parts, kometa_root)
+    _stamp_quickstart_config_marker(config_path, config_name)
+
+    helpers.ts_log(f"argv={command_parts!r}", level="DEBUG")
+
+    proc = subprocess.Popen(command_parts, cwd=str(kometa_root), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+    with open(helpers.get_kometa_pid_file(), "w", encoding="utf-8") as f:
+        f.write(str(proc.pid))
+
+    _schedule_quickstart_run_marker(kometa_root, config_name)
+    return True, proc.pid
+
+
+def _suspend_process_tree(proc):
+    try:
+        for child in proc.children(recursive=True):
+            try:
+                child.suspend()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        proc.suspend()
+        return True
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+
+
+def _resume_process_tree(proc):
+    try:
+        proc.resume()
+        for child in proc.children(recursive=True):
+            try:
+                child.resume()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return True
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+
+
+def _maintenance_guard_loop(app_in):
+    interval = MAINTENANCE_GUARD_INTERVAL
+    env_override = os.getenv("QS_MAINTENANCE_GUARD_INTERVAL")
+    if env_override:
+        try:
+            interval = max(30, min(int(str(env_override).strip()), 300))
+        except Exception:
+            interval = MAINTENANCE_GUARD_INTERVAL
+
+    with app_in.app_context():
+        while True:
+            time.sleep(interval)
+            pid = helpers.get_kometa_pid()
+            start_min, end_min, window_str = _get_maintenance_window_live()
+            if start_min is None or end_min is None:
+                start_min, end_min, window_str = _get_maintenance_window_from_db()
+            active = _is_within_maintenance_window(datetime.now(), start_min, end_min)
+            with MAINTENANCE_STATE_LOCK:
+                MAINTENANCE_STATE["active"] = active
+                MAINTENANCE_STATE["window"] = window_str
+            kometa_running = pid and helpers.is_kometa_running()
+
+            if not kometa_running:
+                with MAINTENANCE_STATE_LOCK:
+                    if MAINTENANCE_STATE["paused"]:
+                        MAINTENANCE_STATE["paused"] = False
+                        MAINTENANCE_STATE["paused_since"] = None
+
+                pending = _peek_pending_kometa_start()
+                if pending and not active and start_min is not None and end_min is not None:
+                    pending = _pop_pending_kometa_start()
+                    if pending:
+                        ok, result = _launch_kometa_command(pending.get("command"), pending.get("config_name"))
+                        if ok:
+                            helpers.ts_log("Kometa started after Plex maintenance window ended.", level="INFO")
+                            with MAINTENANCE_STATE_LOCK:
+                                MAINTENANCE_STATE["queued_started_at"] = datetime.now(timezone.utc).isoformat()
+                        else:
+                            helpers.ts_log(f"Failed to start Kometa after maintenance: {result}", level="ERROR")
+                continue
+
+            if start_min is None or end_min is None:
+                continue
+
+            try:
+                proc = psutil.Process(pid)
+            except psutil.NoSuchProcess:
+                with MAINTENANCE_STATE_LOCK:
+                    MAINTENANCE_STATE["paused"] = False
+                    MAINTENANCE_STATE["paused_since"] = None
+                continue
+
+            if active:
+                with MAINTENANCE_STATE_LOCK:
+                    already_paused = MAINTENANCE_STATE["paused"]
+                if not already_paused:
+                    if _suspend_process_tree(proc):
+                        helpers.ts_log("Kometa paused due to Plex maintenance window.", level="INFO")
+                        with MAINTENANCE_STATE_LOCK:
+                            MAINTENANCE_STATE["paused"] = True
+                            MAINTENANCE_STATE["paused_since"] = datetime.now(timezone.utc).isoformat()
+                continue
+
+            with MAINTENANCE_STATE_LOCK:
+                was_paused = MAINTENANCE_STATE["paused"]
+            if was_paused:
+                if _resume_process_tree(proc):
+                    helpers.ts_log("Plex maintenance ended. Kometa resumed.", level="INFO")
+                    with MAINTENANCE_STATE_LOCK:
+                        MAINTENANCE_STATE["paused"] = False
+                        MAINTENANCE_STATE["paused_since"] = None
 
 
 def _write_quickstart_run_marker(kometa_root, config_name=None):
@@ -4561,99 +4869,77 @@ def start_kometa():
             return jsonify({"error": f"Kometa is already running (PID: {pid}) since {started_at}.", "status": "running", "pid": pid, "started_at": started_at}), 400
         except Exception:
             return jsonify({"error": f"Kometa is already running (PID: {pid}).", "status": "running", "pid": pid}), 400
+    else:
+        proc = _find_running_kometa_process()
+        if proc:
+            try:
+                with open(helpers.get_kometa_pid_file(), "w", encoding="utf-8") as f:
+                    f.write(str(proc.pid))
+                started_at = datetime.fromtimestamp(proc.create_time()).isoformat()
+            except Exception:
+                started_at = None
+            payload = {"error": f"Kometa is already running (PID: {proc.pid}).", "status": "running", "pid": proc.pid}
+            if started_at:
+                payload["started_at"] = started_at
+            return jsonify(payload), 400
 
-    kometa_root = helpers.get_kometa_root_path()  # ✅ unified source of truth
-    is_win = sys.platform.startswith("win")
-    venv_python = kometa_root / "kometa-venv" / ("Scripts" if is_win else "bin") / ("python.exe" if is_win else "python3")
-    kometa_py = kometa_root / "kometa.py"
+    start_min, end_min, window_str = _get_maintenance_window_live()
+    if start_min is None or end_min is None:
+        start_min, end_min, window_str = _get_maintenance_window_from_db()
+    if _is_within_maintenance_window(datetime.now(), start_min, end_min):
+        _set_pending_kometa_start(command, session.get("config_name"))
+        return jsonify({"status": "queued", "maintenance_window": window_str}), 202
 
-    if not kometa_py.exists():
-        return jsonify({"error": f"kometa.py not found at: {kometa_py}"}), 404
-    if not venv_python.exists():
-        return jsonify({"error": f"Kometa venv python not found at: {venv_python}"}), 500
-
-    try:
-        # Use posix=False so Windows backslashes/quotes are preserved
-        command_parts = shlex.split(command, posix=not is_win)
-
-        # Clean up double-wrapped args (affects --run-libraries, --times, etc.)
-        helpers.normalize_cli_args_inplace(command_parts)
-
-        # If the UI-built command already starts with python, replace it with our venv python
-        if command_parts and os.path.basename(command_parts[0]).lower() in {"python", "python3", "python.exe"}:
-            command_parts[0] = str(venv_python)
-        else:
-            command_parts.insert(0, str(venv_python))
-
-        # Make sure kometa.py is the script, even if the UI command omitted it
-        if not any(p.endswith("kometa.py") for p in command_parts):
-            command_parts.insert(1, str(kometa_py))
-
-        helpers.normalize_flag_values(command_parts)
-
-        config_path = _extract_kometa_config_path(command_parts, kometa_root)
-        _stamp_quickstart_config_marker(config_path, session.get("config_name"))
-
-        helpers.ts_log(f"argv={command_parts!r}", level="DEBUG")
-
-        proc = subprocess.Popen(command_parts, cwd=str(kometa_root), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-
-        with open(helpers.get_kometa_pid_file(), "w", encoding="utf-8") as f:
-            f.write(str(proc.pid))
-
-        _schedule_quickstart_run_marker(kometa_root, session.get("config_name"))
-
-        return jsonify({"status": "Kometa started", "pid": proc.pid})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    ok, result = _launch_kometa_command(command, session.get("config_name"))
+    if ok:
+        return jsonify({"status": "Kometa started", "pid": result})
+    code = 500
+    if isinstance(result, str) and result.lower().startswith("kometa.py not found"):
+        code = 404
+    return jsonify({"error": result}), code
 
 
 @app.route("/stop-kometa", methods=["POST"])
 def stop_kometa():
+    _clear_pending_kometa_start()
     pid = helpers.get_kometa_pid()
     pid_file = helpers.get_kometa_pid_file()
 
     if not pid:
-        return jsonify({"warning": "No active Kometa PID"}), 200
+        procs = _find_running_kometa_processes()
+        if not procs:
+            return jsonify({"warning": "No active Kometa PID"}), 200
+    else:
+        procs = [_find_running_kometa_process()]
+        procs = [p for p in procs if p is not None]
 
     try:
-        proc = psutil.Process(pid)
+        if not procs:
+            return jsonify({"warning": "No active Kometa process found."}), 200
 
-        # Ensure this really looks like a Kometa run before killing
-        cmdline = " ".join(proc.cmdline() or [])
-        if "kometa.py" not in cmdline:
-            try:
-                os.remove(pid_file)
-            except Exception:
-                pass
-            return jsonify({"warning": f"PID {pid} is not a Kometa process. Cleaned PID file."}), 200
-
-        # First try graceful termination
-        try:
-            proc.terminate()  # POSIX: SIGTERM, Windows: TerminateProcess
-        except psutil.NoSuchProcess:
-            pass
-
-        gone, alive = psutil.wait_procs([proc], timeout=3)
-        if alive:
-            # Kill children then parent as a fallback
-            for child in proc.children(recursive=True):
-                try:
-                    child.kill()
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-            try:
-                proc.kill()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+        not_kometa = []
+        alive_after = []
+        for proc in procs:
+            # Ensure this really looks like a Kometa run before killing
+            cmdline = " ".join(proc.cmdline() or [])
+            if "kometa.py" not in cmdline:
+                not_kometa.append(proc.pid)
+                continue
+            alive_after.extend(_stop_process_tree(proc))
 
         # Cleanup PID file regardless
         try:
             os.remove(pid_file)
         except Exception:
             pass
+        KOMETA_CPU_CACHE.pop(pid, None)
 
-        return jsonify({"success": True, "message": "Kometa stopped (or was not running)."}), 200
+        if alive_after:
+            alive_pids = ", ".join(str(p.pid) for p in alive_after if p is not None)
+            return jsonify({"warning": f"Kometa stop requested, but some processes are still running: {alive_pids}"}), 200
+        if not_kometa:
+            return jsonify({"warning": f"Cleaned PID file. Non-Kometa PIDs detected: {', '.join(map(str, not_kometa))}"}), 200
+        return jsonify({"success": True, "message": "Kometa stopped and cleaned up."}), 200
 
     except psutil.NoSuchProcess:
         # Process already gone; just clean up PID file
@@ -4668,9 +4954,36 @@ def stop_kometa():
 
 @app.route("/kometa-status", methods=["GET"])
 def kometa_status():
+    pending = _peek_pending_kometa_start()
+    pending_start = bool(pending)
+    pending_requested_at = pending.get("requested_at") if pending else None
     pid = helpers.get_kometa_pid()
     if not pid:
-        return jsonify(status="not started")
+        proc = _find_running_kometa_process()
+        if proc:
+            try:
+                with open(helpers.get_kometa_pid_file(), "w", encoding="utf-8") as f:
+                    f.write(str(proc.pid))
+                pid = proc.pid
+            except Exception:
+                pid = None
+    if not pid:
+        with MAINTENANCE_STATE_LOCK:
+            maintenance_active = MAINTENANCE_STATE["active"]
+            maintenance_paused = MAINTENANCE_STATE["paused"]
+            maintenance_window = MAINTENANCE_STATE["window"]
+            maintenance_paused_since = MAINTENANCE_STATE["paused_since"]
+            queued_started_at = MAINTENANCE_STATE["queued_started_at"]
+        return jsonify(
+            status="not started",
+            maintenance_active=maintenance_active,
+            maintenance_paused=maintenance_paused,
+            maintenance_window=maintenance_window,
+            maintenance_paused_since=maintenance_paused_since,
+            queued_started_at=queued_started_at,
+            pending_start=pending_start,
+            pending_requested_at=pending_requested_at,
+        )
 
     try:
         proc = psutil.Process(pid)
@@ -4698,6 +5011,12 @@ def kometa_status():
                 system_mem_used_mb = (vm.total - vm.available) / (1024 * 1024)
                 system_mem_total_mb = vm.total / (1024 * 1024)
                 mem_percent = (mem_rss / vm.total) * 100.0 if vm.total else None
+                with MAINTENANCE_STATE_LOCK:
+                    maintenance_active = MAINTENANCE_STATE["active"]
+                    maintenance_paused = MAINTENANCE_STATE["paused"]
+                    maintenance_window = MAINTENANCE_STATE["window"]
+                    maintenance_paused_since = MAINTENANCE_STATE["paused_since"]
+                    queued_started_at = MAINTENANCE_STATE["queued_started_at"]
                 return jsonify(
                     status="running",
                     pid=pid,
@@ -4711,6 +5030,13 @@ def kometa_status():
                     system_memory_percent=round(vm.percent, 1),
                     system_memory_used_mb=round(system_mem_used_mb, 1),
                     system_memory_total_mb=round(system_mem_total_mb, 1),
+                    maintenance_active=maintenance_active,
+                    maintenance_paused=maintenance_paused,
+                    maintenance_window=maintenance_window,
+                    maintenance_paused_since=maintenance_paused_since,
+                    queued_started_at=queued_started_at,
+                    pending_start=pending_start,
+                    pending_requested_at=pending_requested_at,
                 )
         # If we're here, it likely ended; try to get a return code
         try:
@@ -4724,14 +5050,45 @@ def kometa_status():
             except Exception:
                 pass
         KOMETA_CPU_CACHE.pop(pid, None)
-        return jsonify(status="done", return_code=rc if rc is not None else -1)
+        with MAINTENANCE_STATE_LOCK:
+            maintenance_active = MAINTENANCE_STATE["active"]
+            maintenance_paused = MAINTENANCE_STATE["paused"]
+            maintenance_window = MAINTENANCE_STATE["window"]
+            maintenance_paused_since = MAINTENANCE_STATE["paused_since"]
+            queued_started_at = MAINTENANCE_STATE["queued_started_at"]
+        return jsonify(
+            status="done",
+            return_code=rc if rc is not None else -1,
+            maintenance_active=maintenance_active,
+            maintenance_paused=maintenance_paused,
+            maintenance_window=maintenance_window,
+            maintenance_paused_since=maintenance_paused_since,
+            queued_started_at=queued_started_at,
+            pending_start=pending_start,
+            pending_requested_at=pending_requested_at,
+        )
     except psutil.NoSuchProcess:
         KOMETA_CPU_CACHE.pop(pid, None)
         try:
             os.remove(helpers.get_kometa_pid_file())
         except Exception:
             pass
-        return jsonify(status="not started")
+        with MAINTENANCE_STATE_LOCK:
+            maintenance_active = MAINTENANCE_STATE["active"]
+            maintenance_paused = MAINTENANCE_STATE["paused"]
+            maintenance_window = MAINTENANCE_STATE["window"]
+            maintenance_paused_since = MAINTENANCE_STATE["paused_since"]
+            queued_started_at = MAINTENANCE_STATE["queued_started_at"]
+        return jsonify(
+            status="not started",
+            maintenance_active=maintenance_active,
+            maintenance_paused=maintenance_paused,
+            maintenance_window=maintenance_window,
+            maintenance_paused_since=maintenance_paused_since,
+            queued_started_at=queued_started_at,
+            pending_start=pending_start,
+            pending_requested_at=pending_requested_at,
+        )
 
 
 @app.route("/tail-log")
@@ -6944,6 +7301,9 @@ if __name__ == "__main__":
 
     update_thread = threading.Thread(target=start_update_thread, args=(app,), daemon=True)
     update_thread.start()
+
+    maintenance_thread = threading.Thread(target=_maintenance_guard_loop, args=(app,), daemon=True)
+    maintenance_thread.start()
 
     def get_lan_ip():
         try:
