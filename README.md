@@ -52,6 +52,8 @@ Kometa Quickstart is more than just a YAML generator - it's a full interactive e
 - **Process Management:** Start, stop, and monitor Kometa runs directly from the web interface
 - **Maintenance-Aware Runs:** Detects Plex maintenance windows, pauses active runs, and queues new runs until maintenance ends (with global UI badges and toasts)
 
+This reduces the chance of Plex background maintenance colliding with long Kometa runs, keeps Plex more responsive during the window, and avoids wasting time starting a run that would immediately pause.
+
 ![Final Validation Runner](static/images/readme/final-validation-runner.png)
 
 ### Live Previews & Assets
@@ -136,6 +138,7 @@ Special thanks to [meisnate12](https://github.com/meisnate12), [bullmoose20](htt
   - [Windows:](#windows)
   - [Linux/Mac:](#linuxmac)
   - [Debugging \& Changing Ports](#debugging--changing-ports)
+- [Testing](#testing)
 
 ## Prerequisites
 
@@ -366,5 +369,29 @@ Quickstart runs on port 7171 by default. You can change it in one of three ways:
 
 - Use the Quickstart system tray icon to choose a new port (restarts automatically).
 - Use the Settings cog in the UI to choose a new port (restarts automatically).
+
+## Testing
+
+Quickstart uses pytest for unit/integration tests and Playwright for E2E tests.
+
+Run tests (PowerShell):
+
+```
+.\scripts\run-tests.ps1          # Unit/integration (non-E2E)
+.\scripts\run-tests.ps1 -E2E     # End-to-end tests (Playwright)
+.\scripts\run-tests.ps1 -All     # Everything
+```
+
+If you prefer raw commands:
+
+```
+python -m pytest -m "not e2e" -vv
+python -m pytest -m e2e -vv
+```
+
+Notes for Playwright on Windows:
+
+- Playwright requires named pipes. If you see `Access is denied`, re-run PowerShell as Administrator or adjust security policy to allow Playwright browser processes.
+- E2E tests load Bootstrap and jQuery from CDNs (`cdn.jsdelivr.net`, `code.jquery.com`). If you’re behind a strict firewall, allowlist those hosts or the tests may fail to render the UI correctly.
 
 <!--body3-end-->
