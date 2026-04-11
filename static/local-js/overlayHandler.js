@@ -2063,7 +2063,7 @@ const OverlayHandler = {
       if (cfg.id !== 'overlay_ratings') return null
       const fontDefaults = {
         font: 'Inter-Medium.ttf',
-        font_size: 55,
+        font_size: 63,
         font_color: '#FFFFFFFF',
         stroke_width: 1,
         stroke_color: '#00000000'
@@ -2134,6 +2134,8 @@ const OverlayHandler = {
         try {
           const img = await loadImageWithFallback(urls)
           const text = sample.text || 'NR'
+          const hOffset = Number(getSlotValue(`${slot.ratingKey}_horizontal_offset`, 0))
+          const vOffset = Number(getSlotValue(`${slot.ratingKey}_vertical_offset`, 0))
           items.push({
             img,
             text,
@@ -2141,7 +2143,9 @@ const OverlayHandler = {
             fontSize: getSlotValue(slot.fontSizeKey, fontDefaults.font_size),
             fontColor: getSlotValue(slot.fontColorKey, fontDefaults.font_color),
             strokeWidth: getSlotValue(slot.strokeWidthKey, fontDefaults.stroke_width),
-            strokeColor: getSlotValue(slot.strokeColorKey, fontDefaults.stroke_color)
+            strokeColor: getSlotValue(slot.strokeColorKey, fontDefaults.stroke_color),
+            hOffset: Number.isFinite(hOffset) ? hOffset : 0,
+            vOffset: Number.isFinite(vOffset) ? vOffset : 0
           })
         } catch (err) {
           console.warn('[OverlayBoards] Failed to load rating image', { value: imageVal, label, err })
@@ -2176,10 +2180,58 @@ const OverlayHandler = {
         : Math.round(contentHeight * 0.08)
       const boxWidth = contentWidth + (innerPad * 2)
       const boxHeight = contentHeight + (innerPad * 2)
-      const gap = innerPad
+      const alignmentRaw = String(getSlotValue('rating_alignment', 'vertical') || '').toLowerCase()
+      const alignment = alignmentRaw === 'horizontal' ? 'horizontal' : 'vertical'
+      const addonRaw = String(getSlotValue('addon_position', alignment === 'horizontal' ? 'left' : 'top') || '').toLowerCase()
+      const addonPosition = addonRaw === 'left' ? 'left' : 'top'
+      const hPosRaw = String(getSlotValue('horizontal_position', 'left') || '').toLowerCase()
+      const vPosRaw = String(getSlotValue('vertical_position', 'center') || '').toLowerCase()
+      const hPos = (hPosRaw === 'center' || hPosRaw === 'right') ? hPosRaw : 'left'
+      const vPos = (vPosRaw === 'top' || vPosRaw === 'bottom') ? vPosRaw : 'center'
+      const addonOffset = Math.max(0, Number(getSlotValue('addon_offset', 15)) || 0)
       const canvas = document.createElement('canvas')
-      canvas.width = Math.ceil(boxWidth)
-      canvas.height = Math.ceil((boxHeight * items.length) + (gap * Math.max(0, items.length - 1)))
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+      items.forEach(item => {
+        minX = Math.min(minX, item.hOffset)
+        minY = Math.min(minY, item.vOffset)
+        maxX = Math.max(maxX, item.hOffset)
+        maxY = Math.max(maxY, item.vOffset)
+      })
+      const boundLeft = minX
+      const boundTop = minY
+      const boundRight = maxX + boxWidth
+      const boundBottom = maxY + boxHeight
+      const anchorX = hPos === 'center'
+        ? (boundLeft + boundRight) / 2
+        : (hPos === 'right' ? boundRight : boundLeft)
+      const anchorY = vPos === 'center'
+        ? (boundTop + boundBottom) / 2
+        : (vPos === 'bottom' ? boundBottom : boundTop)
+      const shifted = items.map(item => ({
+        ...item,
+        renderX: item.hOffset - anchorX,
+        renderY: item.vOffset - anchorY
+      }))
+      let minShiftX = Infinity
+      let minShiftY = Infinity
+      let maxShiftX = -Infinity
+      let maxShiftY = -Infinity
+      shifted.forEach(item => {
+        minShiftX = Math.min(minShiftX, item.renderX)
+        minShiftY = Math.min(minShiftY, item.renderY)
+        maxShiftX = Math.max(maxShiftX, item.renderX)
+        maxShiftY = Math.max(maxShiftY, item.renderY)
+      })
+      if (!Number.isFinite(minShiftX) || !Number.isFinite(minShiftY) || !Number.isFinite(maxShiftX) || !Number.isFinite(maxShiftY)) {
+        return resolveOverlayImage(cfg)
+      }
+      const padX = minShiftX < 0 ? -minShiftX : 0
+      const padY = minShiftY < 0 ? -minShiftY : 0
+      canvas.width = Math.ceil((maxShiftX - minShiftX) + boxWidth)
+      canvas.height = Math.ceil((maxShiftY - minShiftY) + boxHeight)
       const ctx = canvas.getContext('2d')
       if (!ctx) return resolveOverlayImage(cfg)
 
@@ -2191,9 +2243,10 @@ const OverlayHandler = {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'alphabetic'
 
-      items.forEach((item, idx) => {
-        const boxTop = (boxHeight + gap) * idx
-        drawRoundedRect(ctx, 0, boxTop, boxWidth, boxHeight, radius)
+      shifted.forEach((item) => {
+        const boxLeft = item.renderX + padX
+        const boxTop = item.renderY + padY
+        drawRoundedRect(ctx, boxLeft, boxTop, boxWidth, boxHeight, radius)
         if (fill.a > 0) {
           ctx.fillStyle = `rgba(${fill.r}, ${fill.g}, ${fill.b}, ${fill.a})`
           ctx.fill()
@@ -2201,7 +2254,7 @@ const OverlayHandler = {
         if (lineWidth > 0 && stroke.a > 0) {
           const inset = lineWidth / 2
           const strokeRadius = Math.max(0, radius - inset)
-          drawRoundedRect(ctx, inset, boxTop + inset, boxWidth - (inset * 2), boxHeight - (inset * 2), strokeRadius)
+          drawRoundedRect(ctx, boxLeft + inset, boxTop + inset, boxWidth - (inset * 2), boxHeight - (inset * 2), strokeRadius)
           ctx.strokeStyle = `rgba(${stroke.r}, ${stroke.g}, ${stroke.b}, ${stroke.a})`
           ctx.lineWidth = lineWidth
           ctx.stroke()
@@ -2215,18 +2268,40 @@ const OverlayHandler = {
         const strokeWidth = Math.max(0, Number(item.strokeWidth) || 0)
         const strokeColor = item.strokeColor || fontDefaults.stroke_color
 
-        const textBottom = boxTop + boxHeight - innerPad
         ctx.font = `700 ${fontSize}px "${fontFamily}"`
-        drawTextWithStroke(ctx, item.text, boxWidth / 2, textBottom, fontColor, strokeColor, strokeWidth)
+        if (addonPosition === 'left') {
+          const contentX = boxLeft + innerPad
+          const contentY = boxTop + innerPad
+          const contentW = boxWidth - (innerPad * 2)
+          const contentH = boxHeight - (innerPad * 2)
+          const iconMaxHeight = Math.max(1, contentH)
+          const scale = iconMaxHeight / item.img.height
+          const drawW = item.img.width * scale
+          const drawH = item.img.height * scale
+          const drawX = contentX
+          const drawY = contentY + ((contentH - drawH) / 2)
+          ctx.drawImage(item.img, drawX, drawY, drawW, drawH)
 
-        const iconMaxHeight = Math.max(1, boxHeight - fontSize - (innerPad * 2))
-        const iconMaxWidth = Math.max(1, boxWidth - (innerPad * 2))
-        const scale = Math.min(iconMaxWidth / item.img.width, iconMaxHeight / item.img.height, 1)
-        const drawW = item.img.width * scale
-        const drawH = item.img.height * scale
-        const drawX = (boxWidth - drawW) / 2
-        const drawY = boxTop + innerPad + ((iconMaxHeight - drawH) / 2)
-        ctx.drawImage(item.img, drawX, drawY, drawW, drawH)
+          const textRegionX = contentX + drawW + addonOffset
+          const textRegionW = Math.max(1, (contentX + contentW) - textRegionX)
+          const textX = textRegionX + (textRegionW / 2)
+          const textY = contentY + (contentH / 2) + (fontSize * 0.35)
+          ctx.textAlign = 'center'
+          drawTextWithStroke(ctx, item.text, textX, textY, fontColor, strokeColor, strokeWidth)
+          ctx.textAlign = 'center'
+        } else {
+          const textBottom = boxTop + boxHeight - innerPad
+          drawTextWithStroke(ctx, item.text, boxLeft + (boxWidth / 2), textBottom, fontColor, strokeColor, strokeWidth)
+
+          const iconMaxHeight = Math.max(1, boxHeight - fontSize - (innerPad * 2))
+          const iconMaxWidth = Math.max(1, boxWidth - (innerPad * 2))
+          const scale = Math.min(iconMaxWidth / item.img.width, iconMaxHeight / item.img.height)
+          const drawW = item.img.width * scale
+          const drawH = item.img.height * scale
+          const drawX = boxLeft + (boxWidth - drawW) / 2
+          const drawY = boxTop + innerPad + ((iconMaxHeight - drawH) / 2)
+          ctx.drawImage(item.img, drawX, drawY, drawW, drawH)
+        }
       })
 
       cfg.naturalWidth = canvas.width
@@ -4215,7 +4290,7 @@ const OverlayHandler = {
         }
 
         if (cfg.id === 'overlay_ratings' && layer && cfg.container) {
-          const refreshRatings = (event, forceSync = false) => {
+          const runRatingsUpdate = (event, forceSync = false) => {
             if (cfg.container?.dataset?.resetting === 'true') return
             enforceUniqueRatingTypes(cfg)
             if (event && event.target && cfg.container) {
@@ -4240,19 +4315,27 @@ const OverlayHandler = {
               slots.forEach(slot => syncRatingSources(cfg, slot))
             }
             const positionInput = cfg.container.querySelector(`[name="${templateName}[horizontal_position]"]`)
-            if (positionInput) {
-              const raw = (positionInput.value || positionInput.dataset?.default || '').toString().trim().toLowerCase()
-              if (raw === 'left' || raw === 'center' || raw === 'right') {
-                const { vAlign } = parseOrigin(cfg.origin || '')
-                let nextOrigin = ''
-                if (vAlign === 'center') {
-                  nextOrigin = raw === 'center' ? 'center' : `center_${raw}`
-                } else {
-                  nextOrigin = raw === 'center' ? vAlign : `${vAlign}_${raw}`
-                }
-                if (nextOrigin && cfg.origin !== nextOrigin) {
-                  cfg.origin = nextOrigin
-                }
+            const verticalInput = cfg.container.querySelector(`[name="${templateName}[vertical_position]"]`)
+            if (positionInput || verticalInput) {
+              const rawH = (positionInput?.value || positionInput?.dataset?.default || '').toString().trim().toLowerCase()
+              const rawV = (verticalInput?.value || verticalInput?.dataset?.default || '').toString().trim().toLowerCase()
+              const { hAlign, vAlign } = parseOrigin(cfg.origin || 'center_left')
+              const nextH = (rawH === 'left' || rawH === 'center' || rawH === 'right') ? rawH : hAlign
+              const nextV = (rawV === 'top' || rawV === 'center' || rawV === 'bottom') ? rawV : vAlign
+              const safeH = (nextH === 'left' || nextH === 'center' || nextH === 'right') ? nextH : 'left'
+              const safeV = (nextV === 'top' || nextV === 'center' || nextV === 'bottom') ? nextV : 'center'
+              let nextOrigin = ''
+              if (safeH === 'center' && safeV === 'center') {
+                nextOrigin = 'center'
+              } else if (safeH === 'center') {
+                nextOrigin = `${safeV}_center`
+              } else if (safeV === 'center') {
+                nextOrigin = `center_${safeH}`
+              } else {
+                nextOrigin = `${safeV}_${safeH}`
+              }
+              if (nextOrigin && cfg.origin !== nextOrigin) {
+                cfg.origin = nextOrigin
               }
             }
             applyRatingFontDefaults(cfg)
@@ -4261,6 +4344,23 @@ const OverlayHandler = {
             buildBackdropDataUrl(cfg).then(dataUrl => {
               layer.src = dataUrl
               applyPosition(cfg)
+            })
+          }
+          const scheduleRatingsUpdate = (event, forceSync = false) => {
+            if (!cfg.container) return
+            if (cfg.container.dataset.ratingRefreshScheduled === 'true') {
+              if (forceSync) cfg.container.dataset.ratingRefreshForce = 'true'
+              return
+            }
+            cfg.container.dataset.ratingRefreshScheduled = 'true'
+            if (forceSync) cfg.container.dataset.ratingRefreshForce = 'true'
+            requestAnimationFrame(() => {
+              const doForce = cfg.container?.dataset?.ratingRefreshForce === 'true'
+              if (cfg.container) {
+                delete cfg.container.dataset.ratingRefreshScheduled
+                delete cfg.container.dataset.ratingRefreshForce
+              }
+              runRatingsUpdate(null, doForce)
             })
           }
           const templateName = cfg.container.dataset.overlayTemplate
@@ -4301,25 +4401,32 @@ const OverlayHandler = {
             `[name="${templateName}[rating3_font_color]"]`,
             `[name="${templateName}[rating3_stroke_width]"]`,
             `[name="${templateName}[rating3_stroke_color]"]`,
-            `[name="${templateName}[horizontal_position]"]`
+            `[name="${templateName}[horizontal_position]"]`,
+            `[name="${templateName}[vertical_position]"]`,
+            `[name="${templateName}[rating_alignment]"]`,
+            `[name="${templateName}[back_width]"]`,
+            `[name="${templateName}[back_height]"]`,
+            `[name="${templateName}[back_padding]"]`,
+            `[name="${templateName}[addon_position]"]`,
+            `[name="${templateName}[addon_offset]"]`
           ]
           const inputs = cfg.container.querySelectorAll(ratingSelectors.join(', '))
           inputs.forEach(input => {
-            input.addEventListener('input', refreshRatings)
-            input.addEventListener('change', refreshRatings)
+            input.addEventListener('input', scheduleRatingsUpdate)
+            input.addEventListener('change', scheduleRatingsUpdate)
           })
           if (cfg.toggle && cfg.toggle.dataset.ratingSyncBound !== 'true') {
             cfg.toggle.dataset.ratingSyncBound = 'true'
             cfg.toggle.addEventListener('change', () => {
               if (cfg.toggle.checked) {
-                refreshRatings(null, true)
+                scheduleRatingsUpdate(null, true)
               }
             })
           }
           if (cfg.toggle && cfg.toggle.checked) {
-            refreshRatings(null, true)
+            scheduleRatingsUpdate(null, true)
           } else {
-            refreshRatings()
+            scheduleRatingsUpdate()
           }
         }
 

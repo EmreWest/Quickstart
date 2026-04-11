@@ -1922,6 +1922,12 @@ function wireOffsetReset (scope) {
 
       if (group) {
         delete group.dataset.resetting
+        if (isRatingsOverlay) {
+          const alignmentInput = group.querySelector('[name$="[rating_alignment]"]')
+          if (alignmentInput) {
+            alignmentInput.dispatchEvent(new Event('change', { bubbles: true }))
+          }
+        }
         if (changes.length) {
           if (isRatingsOverlay) {
             if (hInput) {
@@ -2108,9 +2114,13 @@ function wireRatingsOffsetSync (scope) {
 
     const metricInputs = {
       backHeight: group.querySelector(`[name="${templateName}[back_height]"]`),
+      backWidth: group.querySelector(`[name="${templateName}[back_width]"]`),
       backPadding: group.querySelector(`[name="${templateName}[back_padding]"]`)
     }
+    const alignmentInput = group.querySelector(`[name="${templateName}[rating_alignment]"]`)
+    const addonPositionInput = group.querySelector(`[name="${templateName}[addon_position]"]`)
     const positionInput = group.querySelector(`[name="${templateName}[horizontal_position]"]`)
+    const verticalPositionInput = group.querySelector(`[name="${templateName}[vertical_position]"]`)
     const slotDefs = ['rating1', 'rating2', 'rating3'].map(slot => ({
       slot,
       ratingInput: group.querySelector(`[name="${templateName}[${slot}]"]`),
@@ -2135,14 +2145,172 @@ function wireRatingsOffsetSync (scope) {
     }
     const isConfiguredSlot = (slot) => hasMeaningfulValue(slot.ratingInput) && hasMeaningfulValue(slot.imageInput)
     const getActiveSlots = () => slotDefs.filter(isConfiguredSlot)
-    const getBackPadding = () => Math.max(0, toNumber(metricInputs.backPadding?.value, 15))
-    const getVerticalStep = () => {
-      const backHeight = toNumber(metricInputs.backHeight?.value, 160)
-      const backPadding = getBackPadding()
-      return backHeight + (backPadding * 3)
+    const getAlignment = () => {
+      const raw = normalizeValue(alignmentInput?.value || alignmentInput?.dataset?.default || 'vertical')
+      return raw === 'horizontal' ? 'horizontal' : 'vertical'
     }
-    const getHorizontalSlotOffset = (sharedValue) => {
-      return toNumber(sharedValue, 15) + getBackPadding()
+    const getHorizontalPosition = () => {
+      const raw = normalizeValue(positionInput?.value || positionInput?.dataset?.default || 'left')
+      return (raw === 'center' || raw === 'right') ? raw : 'left'
+    }
+    const getVerticalPosition = () => {
+      const verticalInput = group.querySelector(`[name="${templateName}[vertical_position]"]`)
+      const raw = normalizeValue(verticalInput?.value || verticalInput?.dataset?.default || 'center')
+      return (raw === 'top' || raw === 'bottom') ? raw : 'center'
+    }
+    const getPlacementDefaults = () => {
+      const hPos = getHorizontalPosition()
+      const vPos = getVerticalPosition()
+      return {
+        // Offsets are distance from the selected origin edge.
+        // Left/Right (and Top/Bottom) edge anchors both use +15 for inset margin.
+        horizontal: hPos === 'center' ? 0 : 15,
+        vertical: vPos === 'center' ? 0 : 15
+      }
+    }
+    const ensureAdjustedIndicator = (input, axisLabel) => {
+      if (!input) return null
+      const wrapper = input.closest('.input-group')
+      if (!wrapper) return null
+      let indicator = wrapper.querySelector(`.ratings-position-adjusted[data-axis="${axisLabel}"]`)
+      if (indicator) return indicator
+      indicator = document.createElement('span')
+      indicator.className = 'input-group-text ratings-position-adjusted d-none'
+      indicator.dataset.axis = axisLabel
+      indicator.textContent = 'Adjusted'
+      indicator.title = `${axisLabel} anchor has manual offset adjustments.`
+      wrapper.appendChild(indicator)
+      return indicator
+    }
+    const horizontalAdjustedIndicator = ensureAdjustedIndicator(positionInput, 'horizontal')
+    const verticalAdjustedIndicator = ensureAdjustedIndicator(verticalPositionInput, 'vertical')
+    const updateAdjustedIndicators = () => {
+      const defaults = getPlacementDefaults()
+      const hCurrent = Math.round(toNumber(sharedInputs.horizontal?.value, defaults.horizontal))
+      const vCurrent = Math.round(toNumber(sharedInputs.vertical?.value, defaults.vertical))
+      if (horizontalAdjustedIndicator) {
+        horizontalAdjustedIndicator.classList.toggle('d-none', hCurrent === defaults.horizontal)
+      }
+      if (verticalAdjustedIndicator) {
+        verticalAdjustedIndicator.classList.toggle('d-none', vCurrent === defaults.vertical)
+      }
+    }
+    const setDefaultValue = (input, nextValue, force = false) => {
+      if (!input || nextValue === undefined || nextValue === null) return
+      const prevDefault = input.dataset.default
+      const prevValue = String(input.value ?? '')
+      const prevDefaultValue = String(prevDefault ?? '')
+      const shouldUpdate = force || prevValue === prevDefaultValue || prevValue === ''
+      input.dataset.default = String(nextValue)
+      if (shouldUpdate) {
+        input.value = String(nextValue)
+        if (group.dataset.ratingsBulkUpdate !== 'true') {
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+          input.dispatchEvent(new Event('change', { bubbles: true }))
+        }
+      }
+    }
+    const applyAlignmentDefaults = (force = false) => {
+      if (!alignmentInput) return
+      const alignment = getAlignment()
+      const defaults = alignment === 'horizontal'
+        ? { backWidth: 270, backHeight: 80, addonPosition: 'left' }
+        : { backWidth: 160, backHeight: 160, addonPosition: 'top' }
+      setDefaultValue(metricInputs.backWidth, defaults.backWidth, force)
+      setDefaultValue(metricInputs.backHeight, defaults.backHeight, force)
+      setDefaultValue(addonPositionInput, defaults.addonPosition, force)
+    }
+    const applyPlacementDefaults = (force = false) => {
+      const defaults = getPlacementDefaults()
+      setDefaultValue(sharedInputs.horizontal, defaults.horizontal, force)
+      setDefaultValue(sharedInputs.vertical, defaults.vertical, force)
+    }
+    const ratingConstants = {
+      edgeInset: 30,
+      center: 0,
+      v2: 235,
+      v3: 440,
+      cv2: 105,
+      cv3: 205,
+      h2: 345,
+      h3: 660,
+      ch2: 160,
+      ch3: 335
+    }
+    const buildAxisPositions = (axis, position, count) => {
+      const safeCount = Math.max(1, Math.min(3, Number(count) || 1))
+      if (axis === 'horizontal') {
+        if (position === 'center') {
+          if (safeCount === 1) return [ratingConstants.center]
+          if (safeCount === 2) return [-ratingConstants.ch2, ratingConstants.ch2]
+          return [-ratingConstants.ch3, ratingConstants.center, ratingConstants.ch3]
+        }
+        if (position === 'right') {
+          if (safeCount === 1) return [-ratingConstants.edgeInset]
+          if (safeCount === 2) return [-ratingConstants.h2, -ratingConstants.edgeInset]
+          return [-ratingConstants.h3, -ratingConstants.h2, -ratingConstants.edgeInset]
+        }
+        if (safeCount === 1) return [ratingConstants.edgeInset]
+        if (safeCount === 2) return [ratingConstants.edgeInset, ratingConstants.h2]
+        return [ratingConstants.edgeInset, ratingConstants.h2, ratingConstants.h3]
+      }
+
+      if (position === 'center') {
+        if (safeCount === 1) return [ratingConstants.center]
+        if (safeCount === 2) return [-ratingConstants.cv2, ratingConstants.cv2]
+        return [-ratingConstants.cv3, ratingConstants.center, ratingConstants.cv3]
+      }
+      if (position === 'bottom') {
+        if (safeCount === 1) return [-ratingConstants.edgeInset]
+        if (safeCount === 2) return [-ratingConstants.v2, -ratingConstants.edgeInset]
+        return [-ratingConstants.v3, -ratingConstants.v2, -ratingConstants.edgeInset]
+      }
+      if (safeCount === 1) return [ratingConstants.edgeInset]
+      if (safeCount === 2) return [ratingConstants.edgeInset, ratingConstants.v2]
+      return [ratingConstants.edgeInset, ratingConstants.v2, ratingConstants.v3]
+    }
+    const computeRatingOffsets = () => {
+      const alignment = getAlignment()
+      const hPos = getHorizontalPosition()
+      const vPos = getVerticalPosition()
+      const activeSlots = getActiveSlots()
+      const activeCount = activeSlots.length
+      const offsets = {
+        rating1: { horizontal: ratingConstants.edgeInset, vertical: ratingConstants.edgeInset },
+        rating2: { horizontal: ratingConstants.edgeInset, vertical: ratingConstants.edgeInset },
+        rating3: { horizontal: ratingConstants.edgeInset, vertical: ratingConstants.edgeInset }
+      }
+      if (!activeCount) return offsets
+
+      if (alignment === 'horizontal') {
+        const xPositions = buildAxisPositions('horizontal', hPos, activeCount)
+        const yShared = vPos === 'center' ? 0 : (vPos === 'bottom' ? -ratingConstants.edgeInset : ratingConstants.edgeInset)
+        activeSlots.forEach((slot, idx) => {
+          offsets[slot.slot].horizontal = xPositions[idx]
+          offsets[slot.slot].vertical = yShared
+        })
+        return offsets
+      }
+
+      const yPositions = buildAxisPositions('vertical', vPos, activeCount)
+      const xShared = hPos === 'center' ? 0 : (hPos === 'right' ? -ratingConstants.edgeInset : ratingConstants.edgeInset)
+      activeSlots.forEach((slot, idx) => {
+        offsets[slot.slot].horizontal = xShared
+        offsets[slot.slot].vertical = yPositions[idx]
+      })
+      return offsets
+    }
+    const applyComputedOffsets = (force = false) => {
+      const offsets = computeRatingOffsets()
+      const targetSlots = slotDefs.filter(slot => slot.horizontalInput || slot.verticalInput)
+      group.dataset.ratingsBulkUpdate = 'true'
+      targetSlots.forEach(slot => {
+        const computed = offsets[slot.slot]
+        if (!computed) return
+        setDefaultValue(slot.horizontalInput, computed.horizontal, force)
+        setDefaultValue(slot.verticalInput, computed.vertical, force)
+      })
+      delete group.dataset.ratingsBulkUpdate
     }
     const updateInputValue = (input, nextValue) => {
       if (!input) return
@@ -2176,24 +2344,39 @@ function wireRatingsOffsetSync (scope) {
 
     const syncSharedFromSlots = (axis) => {
       const sharedInput = sharedInputs[axis]
-      const inputs = getActiveSlots().map(slot => slot[`${axis}Input`]).filter(Boolean)
-      if (!sharedInput || !inputs.length) return
+      const activeSlots = getActiveSlots()
+      const inputs = activeSlots.map(slot => slot[`${axis}Input`]).filter(Boolean)
+      if (!sharedInput || !inputs.length || !activeSlots.length) return
       if (group.dataset.syncingRatingOffsets === 'true' || group.dataset.resetting === 'true') {
         sharedInput.dataset.prevValue = String(sharedInput.value ?? '')
         return
       }
-      const average = Math.round(
-        inputs.reduce((sum, input) => sum + toNumber(input.value, toNumber(input.dataset.default, 0)), 0) / inputs.length
-      )
+      const defaults = getPlacementDefaults()
+      const baseOffsets = computeRatingOffsets()
+      const hPos = getHorizontalPosition()
+      const vPos = getVerticalPosition()
+      const deltas = activeSlots.map(slot => {
+        const baseAxis = axis === 'horizontal'
+          ? toNumber(baseOffsets[slot.slot]?.horizontal, 0)
+          : toNumber(baseOffsets[slot.slot]?.vertical, 0)
+        const currentAxis = toNumber(
+          slot[`${axis}Input`]?.value,
+          toNumber(slot[`${axis}Input`]?.dataset?.default, baseAxis)
+        )
+        return currentAxis - baseAxis
+      })
+      const averageDelta = Math.round(deltas.reduce((sum, value) => sum + value, 0) / deltas.length)
       withSyncGuard(() => {
+        const sharedBase = axis === 'horizontal' ? defaults.horizontal : defaults.vertical
         const sharedValue = axis === 'horizontal'
-          ? average - getBackPadding()
-          : average
+          ? (hPos === 'right' ? sharedBase - averageDelta : sharedBase + averageDelta)
+          : (vPos === 'bottom' ? sharedBase - averageDelta : sharedBase + averageDelta)
         sharedInput.value = String(sharedValue)
         sharedInput.dataset.prevValue = String(sharedValue)
         sharedInput.dispatchEvent(new Event('input', { bubbles: true }))
         sharedInput.dispatchEvent(new Event('change', { bubbles: true }))
       })
+      updateAdjustedIndicators()
     }
 
     const syncSlotsFromShared = (axis) => {
@@ -2206,18 +2389,29 @@ function wireRatingsOffsetSync (scope) {
       }
       const current = toNumber(sharedInput.value, toNumber(sharedInput.dataset.default, 0))
       sharedInput.dataset.prevValue = String(current)
+      const defaults = getPlacementDefaults()
+      const baseOffsets = computeRatingOffsets()
+      const hPos = getHorizontalPosition()
+      const vPos = getVerticalPosition()
       withSyncGuard(() => {
         if (axis === 'horizontal') {
-          const slotOffset = getHorizontalSlotOffset(current)
-          activeSlots.forEach(slot => updateInputValue(slot.horizontalInput, slotOffset))
+          const sharedBase = defaults.horizontal
+          const delta = hPos === 'right' ? (sharedBase - current) : (current - sharedBase)
+          activeSlots.forEach(slot => {
+            const baseValue = toNumber(baseOffsets[slot.slot]?.horizontal, 0)
+            updateInputValue(slot.horizontalInput, baseValue + delta)
+          })
           return
         }
-        const verticalStep = getVerticalStep()
-        const centerIndex = (activeSlots.length - 1) / 2
-        activeSlots.forEach((slot, index) => {
-          updateInputValue(slot.verticalInput, current + ((index - centerIndex) * verticalStep))
+
+        const sharedBase = defaults.vertical
+        const delta = vPos === 'bottom' ? (sharedBase - current) : (current - sharedBase)
+        activeSlots.forEach(slot => {
+          const baseValue = toNumber(baseOffsets[slot.slot]?.vertical, 0)
+          updateInputValue(slot.verticalInput, baseValue + delta)
         })
       })
+      updateAdjustedIndicators()
     }
 
     const seedSharedFromSlots = () => {
@@ -2227,6 +2421,9 @@ function wireRatingsOffsetSync (scope) {
       if (hasExplicitSlotOffsets('vertical')) syncSharedFromSlots('vertical')
     }
 
+    applyAlignmentDefaults()
+    applyPlacementDefaults()
+    applyComputedOffsets()
     seedSharedFromSlots()
 
     Object.entries(sharedInputs).forEach(([axis, input]) => {
@@ -2236,14 +2433,47 @@ function wireRatingsOffsetSync (scope) {
       input.addEventListener('change', syncFromShared)
     })
 
+    if (alignmentInput && alignmentInput.dataset.ratingsAlignmentBound !== 'true') {
+      const handleAlignmentChange = () => {
+        if (group.dataset.resetting === 'true') return
+        group.dataset.ratingsBulkUpdate = 'true'
+        applyAlignmentDefaults(true)
+        applyPlacementDefaults(true)
+        applyComputedOffsets(true)
+        delete group.dataset.ratingsBulkUpdate
+        refreshDerivedOffsets()
+      }
+      alignmentInput.addEventListener('input', handleAlignmentChange)
+      alignmentInput.addEventListener('change', handleAlignmentChange)
+      alignmentInput.dataset.ratingsAlignmentBound = 'true'
+    }
+
     if (positionInput && positionInput.dataset.ratingsPositionBound !== 'true') {
       const refreshFromPosition = () => {
         if (group.dataset.resetting === 'true') return
-        sharedInputs.horizontal?.dispatchEvent(new Event('change', { bubbles: true }))
-        sharedInputs.vertical?.dispatchEvent(new Event('change', { bubbles: true }))
+        group.dataset.ratingsBulkUpdate = 'true'
+        applyPlacementDefaults(true)
+        applyComputedOffsets(true)
+        delete group.dataset.ratingsBulkUpdate
+        refreshDerivedOffsets()
+        updateAdjustedIndicators()
       }
       positionInput.addEventListener('change', refreshFromPosition)
       positionInput.dataset.ratingsPositionBound = 'true'
+    }
+
+    if (verticalPositionInput && verticalPositionInput.dataset.ratingsPositionBound !== 'true') {
+      const refreshFromVertical = () => {
+        if (group.dataset.resetting === 'true') return
+        group.dataset.ratingsBulkUpdate = 'true'
+        applyPlacementDefaults(true)
+        applyComputedOffsets(true)
+        delete group.dataset.ratingsBulkUpdate
+        refreshDerivedOffsets()
+        updateAdjustedIndicators()
+      }
+      verticalPositionInput.addEventListener('change', refreshFromVertical)
+      verticalPositionInput.dataset.ratingsPositionBound = 'true'
     }
 
     Object.entries(slotInputs).forEach(([axis, inputs]) => {
@@ -2253,11 +2483,18 @@ function wireRatingsOffsetSync (scope) {
     })
 
     const refreshDerivedOffsets = () => {
-      if (!valuesDiffer(sharedInputs.horizontal) && !valuesDiffer(sharedInputs.vertical) && !hasExplicitSlotOffsets()) {
+      if (group.dataset.resetting === 'true') return
+      const sharedChanged = valuesDiffer(sharedInputs.horizontal) || valuesDiffer(sharedInputs.vertical)
+      if (sharedChanged) {
+        syncSlotsFromShared('horizontal')
+        syncSlotsFromShared('vertical')
+        updateAdjustedIndicators()
         return
       }
-      syncSlotsFromShared('horizontal')
-      syncSlotsFromShared('vertical')
+      if (!hasExplicitSlotOffsets()) {
+        applyComputedOffsets()
+      }
+      updateAdjustedIndicators()
     }
 
     slotDefs.forEach(slot => {
@@ -2265,8 +2502,10 @@ function wireRatingsOffsetSync (scope) {
       if (slot.imageInput) slot.imageInput.addEventListener('change', refreshDerivedOffsets)
     })
     if (metricInputs.backHeight) metricInputs.backHeight.addEventListener('change', refreshDerivedOffsets)
+    if (metricInputs.backWidth) metricInputs.backWidth.addEventListener('change', refreshDerivedOffsets)
     if (metricInputs.backPadding) metricInputs.backPadding.addEventListener('change', refreshDerivedOffsets)
 
+    updateAdjustedIndicators()
     group.dataset.ratingsOffsetSyncBound = 'true'
   })
 }

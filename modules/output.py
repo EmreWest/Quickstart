@@ -1,4 +1,5 @@
 import io
+import copy
 import os
 import ast
 import json
@@ -52,10 +53,10 @@ def clean_section_data(section_data, config_attribute):
                 clean_sub_data = {}
                 for sub_key, sub_value in value.items():
                     if not sub_key.startswith("tmp_"):
-                        clean_sub_data[sub_key] = sub_value
+                        clean_sub_data[sub_key] = copy.deepcopy(sub_value)
                 clean_data[key] = clean_sub_data
             else:
-                clean_data[key] = value
+                clean_data[key] = copy.deepcopy(value)
 
     return clean_data
 
@@ -450,70 +451,201 @@ def optimize_template_variables(config_data, library_types=None):
                 slot_ids.append(idx)
         if not slot_ids:
             return
-
         defaults = defaults or {}
-        back_height = _to_offset_number(tv.get("back_height", defaults.get("back_height")), 160)
-        back_padding = max(0, _to_offset_number(tv.get("back_padding", defaults.get("back_padding")), 15))
-        vertical_step = back_height + (back_padding * 3)
-        center_index = (len(slot_ids) - 1) / 2
 
-        shared_horizontal = tv.get("horizontal_offset", defaults.get("horizontal_offset", 15))
-        shared_vertical = tv.get("vertical_offset", defaults.get("vertical_offset", 0))
-        shared_horizontal_num = _to_offset_number(shared_horizontal, 15) + back_padding
-        shared_vertical_num = _to_offset_number(shared_vertical, 0)
+        def _normalize_choice(value, fallback):
+            raw = str(value if value is not None else fallback).strip().lower()
+            return raw
 
-        explicit_verticals = []
-        all_explicit_verticals_present = True
+        def _slot_enabled(slot):
+            rating_val = _normalize_choice(tv.get(f"rating{slot}"), "")
+            image_val = _normalize_choice(tv.get(f"rating{slot}_image"), "")
+            if rating_val in ("", "none") or image_val in ("", "none"):
+                return False
+            return True
+
+        alignment = _normalize_choice(tv.get("rating_alignment", defaults.get("rating_alignment", "vertical")), "vertical")
+        if alignment not in ("horizontal", "vertical"):
+            alignment = "vertical"
+        h_pos = _normalize_choice(tv.get("horizontal_position", defaults.get("horizontal_position", "left")), "left")
+        if h_pos not in ("left", "center", "right"):
+            h_pos = "left"
+        v_pos = _normalize_choice(tv.get("vertical_position", defaults.get("vertical_position", "center")), "center")
+        if v_pos not in ("top", "center", "bottom"):
+            v_pos = "center"
+
+        if isinstance(defaults, dict):
+            defaults["back_width"] = 270 if alignment == "horizontal" else 160
+            defaults["back_height"] = 80 if alignment == "horizontal" else 160
+            defaults["addon_position"] = "left" if alignment == "horizontal" else "top"
+            defaults["horizontal_offset"] = 0 if h_pos == "center" else 15
+            defaults["vertical_offset"] = 0 if v_pos == "center" else 15
+
+        rating_constants = {
+            "standard": 30,
+            "center": 0,
+            "v2": 235,
+            "v3": 440,
+            "cv2": 105,
+            "cv3": 205,
+            "h2": 345,
+            "h3": 660,
+            "ch2": 160,
+            "ch3": 335,
+        }
+
+        none1 = not _slot_enabled("1")
+        none2 = not _slot_enabled("2")
+        none3 = not _slot_enabled("3")
+
+        def r1h():
+            if alignment == "vertical" and h_pos == "center":
+                return rating_constants["center"]
+            if alignment == "horizontal" and h_pos == "center" and none2 and none3:
+                return rating_constants["center"]
+            if alignment == "horizontal" and h_pos == "center" and none2:
+                return -rating_constants["ch2"]
+            if alignment == "horizontal" and h_pos == "center" and none3:
+                return -rating_constants["ch2"]
+            if alignment == "horizontal" and h_pos == "center":
+                return -rating_constants["ch3"]
+            if alignment == "horizontal" and h_pos == "right" and none2 and none3:
+                return rating_constants["standard"]
+            if alignment == "horizontal" and h_pos == "right" and none2:
+                return rating_constants["h2"]
+            if alignment == "horizontal" and h_pos == "right" and none3:
+                return rating_constants["h2"]
+            if alignment == "horizontal" and h_pos == "right":
+                return rating_constants["h3"]
+            return rating_constants["standard"]
+
+        def r1v():
+            if alignment == "horizontal" and v_pos == "center":
+                return rating_constants["center"]
+            if alignment == "vertical" and v_pos == "center" and none2 and none3:
+                return rating_constants["center"]
+            if alignment == "vertical" and v_pos == "center" and none2:
+                return -rating_constants["cv2"]
+            if alignment == "vertical" and v_pos == "center" and none3:
+                return -rating_constants["cv2"]
+            if alignment == "vertical" and v_pos == "center":
+                return -rating_constants["cv3"]
+            if alignment == "vertical" and v_pos == "bottom" and none2 and none3:
+                return rating_constants["standard"]
+            if alignment == "vertical" and v_pos == "bottom" and none2:
+                return rating_constants["v2"]
+            if alignment == "vertical" and v_pos == "bottom" and none3:
+                return rating_constants["v2"]
+            if alignment == "vertical" and v_pos == "bottom":
+                return rating_constants["v3"]
+            return rating_constants["standard"]
+
+        def r2h():
+            if alignment == "vertical" and h_pos == "center":
+                return rating_constants["center"]
+            if alignment == "horizontal" and h_pos == "center" and none1 and none3:
+                return rating_constants["center"]
+            if alignment == "horizontal" and h_pos == "center" and none1:
+                return -rating_constants["ch2"]
+            if alignment == "horizontal" and h_pos == "center" and none3:
+                return rating_constants["ch2"]
+            if alignment == "horizontal" and h_pos == "center":
+                return rating_constants["center"]
+            if alignment == "horizontal" and h_pos == "right" and none1 and none3:
+                return rating_constants["standard"]
+            if alignment == "horizontal" and h_pos == "right" and none3:
+                return rating_constants["standard"]
+            if alignment == "horizontal" and h_pos == "right":
+                return rating_constants["h2"]
+            if alignment == "horizontal" and h_pos == "left" and none1:
+                return rating_constants["standard"]
+            if alignment == "horizontal" and h_pos == "left":
+                return rating_constants["h2"]
+            return rating_constants["standard"]
+
+        def r2v():
+            if alignment == "horizontal" and v_pos == "center":
+                return rating_constants["center"]
+            if alignment == "vertical" and v_pos == "center" and none1 and none3:
+                return rating_constants["center"]
+            if alignment == "vertical" and v_pos == "center" and none1:
+                return -rating_constants["cv2"]
+            if alignment == "vertical" and v_pos == "center" and none3:
+                return rating_constants["cv2"]
+            if alignment == "vertical" and v_pos == "center":
+                return rating_constants["center"]
+            if alignment == "vertical" and v_pos == "bottom" and none1 and none3:
+                return rating_constants["standard"]
+            if alignment == "vertical" and v_pos == "bottom" and none1:
+                return rating_constants["v2"]
+            if alignment == "vertical" and v_pos == "bottom" and none3:
+                return rating_constants["standard"]
+            if alignment == "vertical" and v_pos == "bottom":
+                return rating_constants["v2"]
+            if alignment == "vertical" and v_pos == "top" and none1:
+                return rating_constants["standard"]
+            if alignment == "vertical" and v_pos == "top":
+                return rating_constants["v2"]
+            return rating_constants["standard"]
+
+        def r3h():
+            if alignment == "vertical" and h_pos == "center":
+                return rating_constants["center"]
+            if alignment == "horizontal" and h_pos == "center" and none1 and none2:
+                return rating_constants["center"]
+            if alignment == "horizontal" and h_pos == "center" and none1:
+                return rating_constants["ch2"]
+            if alignment == "horizontal" and h_pos == "center" and none2:
+                return rating_constants["ch2"]
+            if alignment == "horizontal" and h_pos == "center":
+                return rating_constants["ch3"]
+            if alignment == "horizontal" and h_pos == "left" and none1 and none2:
+                return rating_constants["standard"]
+            if alignment == "horizontal" and h_pos == "left" and none1:
+                return rating_constants["h2"]
+            if alignment == "horizontal" and h_pos == "left" and none2:
+                return rating_constants["h2"]
+            if alignment == "horizontal" and h_pos == "left":
+                return rating_constants["h3"]
+            return rating_constants["standard"]
+
+        def r3v():
+            if alignment == "horizontal" and v_pos == "center":
+                return rating_constants["center"]
+            if alignment == "vertical" and v_pos == "center" and none1 and none2:
+                return rating_constants["center"]
+            if alignment == "vertical" and v_pos == "center" and none1:
+                return rating_constants["cv2"]
+            if alignment == "vertical" and v_pos == "center" and none2:
+                return rating_constants["cv2"]
+            if alignment == "vertical" and v_pos == "center":
+                return rating_constants["cv3"]
+            if alignment == "vertical" and v_pos == "top" and none1 and none2:
+                return rating_constants["standard"]
+            if alignment == "vertical" and v_pos == "top" and none1:
+                return rating_constants["v2"]
+            if alignment == "vertical" and v_pos == "top" and none2:
+                return rating_constants["v2"]
+            if alignment == "vertical" and v_pos == "top":
+                return rating_constants["v3"]
+            return rating_constants["standard"]
+
+        computed = {
+            "1": {"h": r1h(), "v": r1v()},
+            "2": {"h": r2h(), "v": r2v()},
+            "3": {"h": r3h(), "v": r3v()},
+        }
+
         for idx in slot_ids:
-            key = f"rating{idx}_vertical_offset"
-            if key not in tv:
-                all_explicit_verticals_present = False
-                break
-            explicit_verticals.append(_to_offset_number(tv.get(key), None))
-        if any(value is None for value in explicit_verticals):
-            all_explicit_verticals_present = False
-
-        explicit_horizontals = []
-        all_explicit_horizontals_present = True
-        for idx in slot_ids:
-            key = f"rating{idx}_horizontal_offset"
-            if key not in tv:
-                all_explicit_horizontals_present = False
-                break
-            explicit_horizontals.append(_to_offset_number(tv.get(key), None))
-        if any(value is None for value in explicit_horizontals):
-            all_explicit_horizontals_present = False
-
-        old_vertical_step = back_height + back_padding
-
-        for slot_position, idx in enumerate(slot_ids):
             h_key = f"rating{idx}_horizontal_offset"
             v_key = f"rating{idx}_vertical_offset"
+            if isinstance(defaults, dict):
+                defaults[h_key] = int(round(computed[idx]["h"]))
+                defaults[v_key] = int(round(computed[idx]["v"]))
             if h_key not in tv:
-                tv[h_key] = int(round(shared_horizontal_num))
-            if v_key not in tv or not all_explicit_verticals_present:
-                relative_index = slot_position - center_index
-                tv[v_key] = int(round(shared_vertical_num + (vertical_step * relative_index)))
-
-        if all_explicit_horizontals_present and explicit_horizontals and len(set(explicit_horizontals)) == 1:
-            explicit_horizontal = explicit_horizontals[0]
-            legacy_horizontal = _to_offset_number(shared_horizontal, 15)
-            if explicit_horizontal == legacy_horizontal:
-                for idx in slot_ids:
-                    tv[f"rating{idx}_horizontal_offset"] = int(round(shared_horizontal_num))
-
-        if all_explicit_verticals_present and explicit_verticals:
-            legacy_matches = True
-            for slot_position, explicit_vertical in enumerate(explicit_verticals):
-                relative_index = slot_position - center_index
-                expected_legacy = int(round(shared_vertical_num + (old_vertical_step * relative_index)))
-                if explicit_vertical != expected_legacy:
-                    legacy_matches = False
-                    break
-            if legacy_matches:
-                for slot_position, idx in enumerate(slot_ids):
-                    relative_index = slot_position - center_index
-                    tv[f"rating{idx}_vertical_offset"] = int(round(shared_vertical_num + (vertical_step * relative_index)))
+                tv[h_key] = int(round(computed[idx]["h"]))
+            if v_key not in tv:
+                tv[v_key] = int(round(computed[idx]["v"]))
 
     def _reorder_ratings_template_vars(entry):
         if not isinstance(entry, dict):
@@ -554,6 +686,7 @@ def optimize_template_variables(config_data, library_types=None):
             "rating3_horizontal_offset",
             "rating3_vertical_offset",
             "horizontal_position",
+            "vertical_position",
             "horizontal_offset",
             "vertical_offset",
             "back_align",
@@ -662,17 +795,12 @@ def optimize_template_variables(config_data, library_types=None):
                             "builder_level",
                             "rating1",
                             "rating1_image",
-                            "rating1_horizontal_offset",
-                            "rating1_vertical_offset",
                             "rating2",
                             "rating2_image",
-                            "rating2_horizontal_offset",
-                            "rating2_vertical_offset",
                             "rating3",
                             "rating3_image",
-                            "rating3_horizontal_offset",
-                            "rating3_vertical_offset",
                             "horizontal_position",
+                            "vertical_position",
                         }
                     )
                 if "builder_level" in tv:
@@ -1166,6 +1294,16 @@ def build_libraries_section(
                                 return fallback
                     return fallback
 
+                explicit_slot_offset_keys = {
+                    "rating1_horizontal_offset",
+                    "rating1_vertical_offset",
+                    "rating2_horizontal_offset",
+                    "rating2_vertical_offset",
+                    "rating3_horizontal_offset",
+                    "rating3_vertical_offset",
+                }
+                had_explicit_slot_offsets = any(key in cleaned for key in explicit_slot_offset_keys)
+
                 # Compact the configured rating slots so the emitted YAML always matches the
                 # contiguous stack shown on the Quickstart canvas, even after reducing the
                 # rating count or clearing a middle slot.
@@ -1184,6 +1322,12 @@ def build_libraries_section(
 
                 back_height = _offset_number(cleaned.get("back_height"), 160)
                 back_padding = max(0, _offset_number(cleaned.get("back_padding"), 15))
+                alignment_raw = str(cleaned.get("rating_alignment", "vertical")).strip().lower()
+                alignment = "horizontal" if alignment_raw == "horizontal" else "vertical"
+                h_pos_raw = str(cleaned.get("horizontal_position", "left")).strip().lower()
+                h_pos = h_pos_raw if h_pos_raw in {"left", "center", "right"} else "left"
+                v_pos_raw = str(cleaned.get("vertical_position", "center")).strip().lower()
+                v_pos = v_pos_raw if v_pos_raw in {"top", "center", "bottom"} else "center"
                 vertical_step = back_height + (back_padding * 3)
                 center_index = (len(slot_payloads) - 1) / 2 if slot_payloads else 0
                 shared_horizontal_base = _offset_number(cleaned.get("horizontal_offset"), 15)
@@ -1204,26 +1348,28 @@ def build_libraries_section(
                             slot_payload[slot_key] = int(round(shared_number + (vertical_step * relative_index)))
                     cleaned.pop(shared_key, None)
 
+                preserve_explicit_multi_slot_offsets = had_explicit_slot_offsets and len(slot_payloads) > 1
+
                 # If all explicit per-slot vertical offsets are identical, they
                 # still represent a single shared anchor from Quickstart's composite preview.
                 # Re-expand them to match the preview stack used on the canvas.
                 vertical_values = [_offset_number(slot_payload.get("_vertical_offset"), None) for slot_payload in slot_payloads]
                 horizontal_values = [_offset_number(slot_payload.get("_horizontal_offset"), None) for slot_payload in slot_payloads]
-                if len(slot_payloads) > 1 and all(value is not None for value in vertical_values):
+                if not preserve_explicit_multi_slot_offsets and alignment == "vertical" and len(slot_payloads) > 1 and all(value is not None for value in vertical_values):
                     if len(set(vertical_values)) == 1:
                         base_vertical = vertical_values[0]
                         for slot_position, slot_payload in enumerate(slot_payloads):
                             relative_index = slot_position - center_index
                             slot_payload["_vertical_offset"] = int(round(base_vertical + (vertical_step * relative_index)))
 
-                if slot_payloads and all(value is not None for value in horizontal_values):
+                if not preserve_explicit_multi_slot_offsets and len(slot_payloads) > 1 and all(value is not None for value in horizontal_values):
                     if len(set(horizontal_values)) == 1:
                         base_horizontal = horizontal_values[0]
                         if base_horizontal == shared_horizontal_base:
                             for slot_payload in slot_payloads:
                                 slot_payload["_horizontal_offset"] = int(round(base_horizontal + back_padding))
 
-                if len(slot_payloads) > 1 and all(value is not None for value in vertical_values):
+                if not preserve_explicit_multi_slot_offsets and alignment == "vertical" and len(slot_payloads) > 1 and all(value is not None for value in vertical_values):
                     old_vertical_step = back_height + back_padding
                     legacy_matches = True
                     for slot_position, explicit_vertical in enumerate(vertical_values):
@@ -1236,6 +1382,19 @@ def build_libraries_section(
                         for slot_position, slot_payload in enumerate(slot_payloads):
                             relative_index = slot_position - center_index
                             slot_payload["_vertical_offset"] = int(round(shared_vertical_base + (vertical_step * relative_index)))
+
+                # Kometa enforces non-negative "distance from edge" offsets for right/bottom anchors.
+                # Left/top anchors can still legitimately be negative (intentional nudge past the edge).
+                if h_pos == "right":
+                    for slot_payload in slot_payloads:
+                        value = _offset_number(slot_payload.get("_horizontal_offset"), None)
+                        if value is not None and value < 0:
+                            slot_payload["_horizontal_offset"] = int(round(abs(value)))
+                if v_pos == "bottom":
+                    for slot_payload in slot_payloads:
+                        value = _offset_number(slot_payload.get("_vertical_offset"), None)
+                        if value is not None and value < 0:
+                            slot_payload["_vertical_offset"] = int(round(abs(value)))
 
                 for slot_position, slot_payload in enumerate(slot_payloads, start=1):
                     rating_key = f"rating{slot_position}"
@@ -1928,8 +2087,10 @@ def build_config(header_style="standard", config_name=None):
                 # Fallback to "single line" divider format instead of basic text
                 header_art[config_attribute] = "#==================== " + item["name"] + " ====================#"
 
-        # Retrieve settings for each section
-        section_data = persistence.retrieve_settings(persistence_key)
+        # Retrieve settings for each section.
+        # Deep-copy here so YAML normalization cannot mutate the in-memory
+        # structure returned from persistence for this request lifecycle.
+        section_data = copy.deepcopy(persistence.retrieve_settings(persistence_key))
 
         if "validated" in section_data and section_data["validated"]:
             config_data[config_attribute] = clean_section_data(section_data, config_attribute)
