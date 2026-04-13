@@ -881,6 +881,15 @@ def build_libraries_section(
 ):
     libraries_section = {}
 
+    def sorted_library_items(libraries):
+        """Return deterministic library ordering by display name, then key."""
+        if not isinstance(libraries, dict):
+            return []
+        return sorted(
+            libraries.items(),
+            key=lambda item: (str(item[1]).casefold(), str(item[0]).casefold()),
+        )
+
     def add_entry(
         library_key,
         library_name,
@@ -1936,8 +1945,8 @@ def build_libraries_section(
 
     #############################################################################################
 
-    # Process movie libraries
-    for lk, ln in movie_libraries.items():
+    # Process movie libraries (A->Z by display name, deterministic on key ties)
+    for lk, ln in sorted_library_items(movie_libraries):
         add_entry(
             lk,
             ln,
@@ -1949,8 +1958,8 @@ def build_libraries_section(
             movie_top_level,
         )
 
-    # Process show libraries
-    for lk, ln in show_libraries.items():
+    # Process show libraries (A->Z by display name, deterministic on key ties)
+    for lk, ln in sorted_library_items(show_libraries):
         add_entry(
             lk,
             ln,
@@ -2340,7 +2349,15 @@ def build_config(header_style="standard", config_name=None):
     plex_summary = helpers.get_plex_summary()
     qs_settings_lines = helpers.get_quickstart_settings_summary()
     qs_settings_block = "\n".join(qs_settings_lines) if qs_settings_lines else ""
-    library_names = list(movie_libraries.values()) + list(show_libraries.values())
+    movie_summary_names = sorted(
+        (str(name).strip() for name in movie_libraries.values() if str(name).strip()),
+        key=lambda value: value.casefold(),
+    )
+    show_summary_names = sorted(
+        (str(name).strip() for name in show_libraries.values() if str(name).strip()),
+        key=lambda value: value.casefold(),
+    )
+    library_names = movie_summary_names + show_summary_names
     library_details = helpers.get_library_summaries(library_names)
 
     yaml_content = (
