@@ -7,6 +7,7 @@ $(document).ready(function () {
   const $dailyRuntime = $('#logscan-trends-daily-runtime')
   const $runtime = $('#logscan-trends-runtime')
   const $counts = $('#logscan-trends-counts')
+  const $countsSeries = $('#logscan-trends-counts-series')
   const $ingest = $('#logscan-trends-ingest')
   const $issues = $('#logscan-trends-issues')
   const $libraries = $('#logscan-trends-libraries')
@@ -43,6 +44,7 @@ $(document).ready(function () {
   let reingestPollTimer = null
   let reingestJobId = null
   let allRuns = []
+  const sectionDetailsByRunKey = new Map()
   let currentFilteredRuns = []
   let allRunsTotal = 0
   const sortState = { key: 'finished_at', dir: 'desc' }
@@ -586,14 +588,85 @@ $(document).ready(function () {
     { key: 'summary', label: 'Summary + ingest health' },
     { key: 'daily_runs', label: 'Daily runs' },
     { key: 'runtime_distribution', label: 'Runtime distribution' },
-    { key: 'counts_mix', label: 'Warnings / Errors / Tracebacks' },
+    { key: 'counts_mix', label: 'Log levels + cache' },
     { key: 'issue_trends', label: 'Issue trends' },
     { key: 'library_inventory', label: 'Library inventory' }
   ]
 
+  const LOG_LEVEL_SERIES = [
+    { key: 'cache_line_count', short: 'C', label: 'Cache', css: 'logscan-stack-cache' },
+    { key: 'debug_count', short: 'D', label: 'Debug', css: 'logscan-stack-debug' },
+    { key: 'info_count', short: 'I', label: 'Info', css: 'logscan-stack-info' },
+    { key: 'warning_count', short: 'W', label: 'Warnings', css: 'logscan-stack-warning' },
+    { key: 'error_count', short: 'E', label: 'Errors', css: 'logscan-stack-error' },
+    { key: 'critical_count', short: 'Cr', label: 'Critical', css: 'logscan-stack-critical' },
+    { key: 'trace_count', short: 'T', label: 'Tracebacks', css: 'logscan-stack-trace' }
+  ]
+  const COUNTS_SERIES_STORAGE_KEY = 'qs.logscan.counts.series.v1'
+
   const ANALYTICS_RECOMMENDED_PREFS = {
     panels: PANEL_PREFS.reduce((acc, item) => ({ ...acc, [item.key]: true }), {}),
     issues: ISSUE_PREFS.reduce((acc, item) => ({ ...acc, [item.key]: ISSUE_DEFAULT_KEYS.has(item.key) }), {})
+  }
+
+  function getDefaultCountsSeriesSelection () {
+    const defaults = {}
+    LOG_LEVEL_SERIES.forEach(series => {
+      defaults[series.key] = !['debug_count', 'info_count'].includes(series.key)
+    })
+    return defaults
+  }
+
+  function hasSelectedCountsSeries (selection) {
+    return LOG_LEVEL_SERIES.some(series => selection && selection[series.key])
+  }
+
+  function loadCountsSeriesSelection () {
+    const defaults = getDefaultCountsSeriesSelection()
+    try {
+      const raw = window.localStorage ? window.localStorage.getItem(COUNTS_SERIES_STORAGE_KEY) : null
+      if (!raw) return defaults
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object') return defaults
+      const merged = { ...defaults }
+      LOG_LEVEL_SERIES.forEach(series => {
+        if (Object.prototype.hasOwnProperty.call(parsed, series.key)) {
+          merged[series.key] = Boolean(parsed[series.key])
+        }
+      })
+      return hasSelectedCountsSeries(merged) ? merged : defaults
+    } catch {
+      return defaults
+    }
+  }
+
+  function saveCountsSeriesSelection (selection) {
+    try {
+      if (!window.localStorage) return
+      window.localStorage.setItem(COUNTS_SERIES_STORAGE_KEY, JSON.stringify(selection))
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  const countsSeriesSelection = loadCountsSeriesSelection()
+
+  function getSelectedCountSeries () {
+    return LOG_LEVEL_SERIES.filter(series => countsSeriesSelection && countsSeriesSelection[series.key])
+  }
+
+  function renderCountsSeriesSelector () {
+    if (!$countsSeries.length) return
+    const html = LOG_LEVEL_SERIES.map(series => {
+      const active = Boolean(countsSeriesSelection && countsSeriesSelection[series.key])
+      return `
+        <button type="button" class="logscan-series-toggle ${active ? 'active' : ''}" data-series-key="${escapeHtml(series.key)}" title="Toggle ${escapeHtml(series.label)}">
+          <span class="logscan-legend-swatch ${escapeHtml(series.css)}"></span>
+          <span>${escapeHtml(series.label)}</span>
+        </button>
+      `
+    }).join('')
+    $countsSeries.html(`<div class="logscan-series-filter">${html}</div>`)
   }
 
   function buildConfigColorMap (configs) {
@@ -982,6 +1055,7 @@ $(document).ready(function () {
       $tableBody.html('<tr><td colspan="10" class="text-muted">No runs stored yet.</td></tr>')
       return
     }
+    sectionDetailsByRunKey.clear()
     const rows = runs.map((run, index) => {
       const command = getRunCommandValue(run) || 'n/a'
       const commandTitle = run.run_command
@@ -1001,13 +1075,16 @@ $(document).ready(function () {
         ? run.config_line_count
         : 'n/a'
       const sectionLines = buildSectionDetails(run.section_runtimes, run.run_time_seconds)
-      const sectionId = `logscan-section-${index + 1}`
       const sectionSummary = sectionLines.length ? sectionLines[0] : 'n/a'
       const cacheLineCount = (typeof run.cache_line_count === 'number' && Number.isFinite(run.cache_line_count))
         ? run.cache_line_count
         : 'n/a'
       const sectionDetails = sectionLines.length > 1 ? sectionLines.slice(1) : []
-      const sectionDetailsHtml = sectionDetails.map(line => `<div>${escapeHtml(line)}</div>`).join('')
+      const rowKey = (run.run_key && String(run.run_key).trim()) || `row-${index + 1}`
+      sectionDetailsByRunKey.set(rowKey, {
+        summary: sectionSummary,
+        details: sectionDetails
+      })
       let sectionCell = `
         <div class="d-flex flex-column align-items-center gap-1">
           <div class="text-muted small text-center">${escapeHtml(sectionSummary)}</div>
@@ -1015,13 +1092,10 @@ $(document).ready(function () {
       if (sectionDetails.length) {
         sectionCell += `
           <button type="button" class="btn nav-button btn-sm logscan-action-btn"
-            data-bs-toggle="collapse" data-bs-target="#${sectionId}"
-            aria-expanded="false" aria-controls="${sectionId}">
-            Expand
+            data-run-key="${escapeHtml(rowKey)}"
+            data-section-details="1">
+            View
           </button>
-          <div class="collapse mt-2" id="${sectionId}">
-            <div class="text-muted small">${sectionDetailsHtml}</div>
-          </div>
         `
       }
       sectionCell += '</div>'
@@ -1029,7 +1103,7 @@ $(document).ready(function () {
       if (run.kometa_version && run.kometa_newest_version && run.kometa_version !== run.kometa_newest_version) {
         kometaDisplay = `${run.kometa_version} -> ${run.kometa_newest_version}`
       }
-      const runKey = run.run_key || ''
+      const runKey = run.run_key || rowKey
       return `
         <tr>
           <td class="text-nowrap">${escapeHtml(getDisplayFinished(run))}</td>
@@ -1095,58 +1169,85 @@ $(document).ready(function () {
 
   function renderCountsMix (runs) {
     if (!$counts.length) return
+    const selectedSeries = getSelectedCountSeries()
+    if (!selectedSeries.length) {
+      $counts.text('Select at least one series to display.')
+      return
+    }
     const buckets = {}
     runs.forEach(run => {
       const key = getRunDateKey(run)
       if (!key) return
       if (!buckets[key]) {
-        buckets[key] = { warning: 0, error: 0, trace: 0, count: 0 }
+        buckets[key] = { count: 0 }
+        selectedSeries.forEach(series => {
+          buckets[key][series.key] = 0
+        })
       }
-      buckets[key].warning += getCount(run, 'warning_count')
-      buckets[key].error += getCount(run, 'error_count')
-      buckets[key].trace += getCount(run, 'trace_count')
+      selectedSeries.forEach(series => {
+        if (series.key === 'cache_line_count') {
+          const cacheValue = (typeof run.cache_line_count === 'number' && Number.isFinite(run.cache_line_count))
+            ? run.cache_line_count
+            : 0
+          buckets[key][series.key] += cacheValue
+        } else {
+          buckets[key][series.key] += getCount(run, series.key)
+        }
+      })
       buckets[key].count += 1
     })
     const days = Object.keys(buckets).sort().slice(-14)
     if (!days.length) {
-      $counts.text('No W/E/T averages yet.')
+      $counts.text('No log-level averages yet.')
       return
     }
     const totals = days.map(day => {
       const bucket = buckets[day]
       if (!bucket || !bucket.count) return 0
-      return (bucket.warning + bucket.error + bucket.trace) / bucket.count
+      return selectedSeries.reduce((sum, series) => {
+        return sum + (bucket[series.key] / bucket.count)
+      }, 0)
     })
     const maxTotal = Math.max(...totals, 1)
     const rows = days.map((day, index) => {
       const data = buckets[day]
       const total = totals[index]
-      const avgWarning = data.count ? data.warning / data.count : 0
-      const avgError = data.count ? data.error / data.count : 0
-      const avgTrace = data.count ? data.trace / data.count : 0
+      const averages = {}
+      selectedSeries.forEach(series => {
+        averages[series.key] = data.count ? data[series.key] / data.count : 0
+      })
       const barWidth = maxTotal ? Math.round((total / maxTotal) * 100) : 0
-      const warningPct = total ? Math.round((avgWarning / total) * 100) : 0
-      const errorPct = total ? Math.round((avgError / total) * 100) : 0
-      const tracePct = total ? Math.max(0, 100 - warningPct - errorPct) : 0
+      let usedPct = 0
+      const segments = selectedSeries.map((series, seriesIndex) => {
+        let pct = 0
+        if (total) {
+          if (seriesIndex === selectedSeries.length - 1) {
+            pct = Math.max(0, 100 - usedPct)
+          } else {
+            pct = Math.round((averages[series.key] / total) * 100)
+            usedPct += pct
+          }
+        }
+        return `<span class="logscan-stack-segment ${series.css}" style="width: ${pct}%"></span>`
+      }).join('')
+      const countText = selectedSeries
+        .map(series => `${series.short}:${formatAverage(averages[series.key])}`)
+        .join(' ')
       return `
         <div class="logscan-stack-row">
           <div class="logscan-stack-label">${escapeHtml(day)}</div>
           <div class="logscan-stack-bar-wrap">
             <div class="logscan-stack-bar" style="width: ${barWidth}%">
-              <span class="logscan-stack-segment logscan-stack-warning" style="width: ${warningPct}%"></span>
-              <span class="logscan-stack-segment logscan-stack-error" style="width: ${errorPct}%"></span>
-              <span class="logscan-stack-segment logscan-stack-trace" style="width: ${tracePct}%"></span>
+              ${segments}
             </div>
           </div>
-          <div class="logscan-stack-count">W:${formatAverage(avgWarning)} E:${formatAverage(avgError)} T:${formatAverage(avgTrace)}</div>
+          <div class="logscan-stack-count logscan-stack-count-wide">${escapeHtml(countText)}</div>
         </div>
       `
     })
     const legend = `
       <div class="logscan-stack-legend">
-        <span><span class="logscan-legend-swatch logscan-stack-warning"></span>Warnings</span>
-        <span><span class="logscan-legend-swatch logscan-stack-error"></span>Errors</span>
-        <span><span class="logscan-legend-swatch logscan-stack-trace"></span>Tracebacks</span>
+        ${selectedSeries.map(series => `<span><span class="logscan-legend-swatch ${series.css}"></span>${escapeHtml(series.label)}</span>`).join('')}
       </div>
     `
     $counts.html(`${rows.join('')}${legend}`)
@@ -1912,6 +2013,38 @@ $(document).ready(function () {
       })
   }
 
+  function showSectionDetails (runKey) {
+    const payload = sectionDetailsByRunKey.get(runKey)
+    if (!payload) return
+    if ($runDetailsTitle.length) {
+      $runDetailsTitle.text('Section Runtimes')
+    }
+    if ($runDetailsBody.length) {
+      const summary = payload.summary || 'n/a'
+      const details = Array.isArray(payload.details) ? payload.details : []
+      let bodyHtml = `
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">Summary</div>
+          <div class="small text-muted">${escapeHtml(summary)}</div>
+        </div>
+      `
+      if (!details.length) {
+        bodyHtml += '<div class="small text-muted">No additional section details for this run.</div>'
+      } else {
+        bodyHtml += `
+          <div class="fw-semibold mb-2">Details</div>
+          <div class="small text-muted">
+            ${details.map(line => `<div>${escapeHtml(line)}</div>`).join('')}
+          </div>
+        `
+      }
+      $runDetailsBody.html(bodyHtml)
+    }
+    if (runDetailsModalEl) {
+      bootstrap.Modal.getOrCreateInstance(runDetailsModalEl).show()
+    }
+  }
+
   function fetchRuns (options = {}) {
     const suppressStatus = options && options.suppressStatus
     const rawLimit = String($limit.val() || '25').toLowerCase()
@@ -1946,7 +2079,7 @@ $(document).ready(function () {
           $dailyRuntime.text('Unable to load runtime averages.')
         }
         $runtime.text('Unable to load runtime distribution.')
-        $counts.text('Unable to load W/E/T averages.')
+        $counts.text('Unable to load log-level averages.')
         $issues.text('Unable to load issue trends.')
         $libraries.text('Unable to load library totals.')
         $tableBody.html('<tr><td colspan="10" class="text-muted">Unable to load runs.</td></tr>')
@@ -1968,6 +2101,18 @@ $(document).ready(function () {
   })
   $libraryFilter.on('change', function () {
     renderLibraryInventory(currentFilteredRuns)
+  })
+  $countsSeries.on('click', '.logscan-series-toggle', function () {
+    const key = $(this).data('seriesKey') || $(this).attr('data-series-key')
+    if (!key || !Object.prototype.hasOwnProperty.call(countsSeriesSelection, key)) return
+    const currentlyEnabled = Boolean(countsSeriesSelection[key])
+    if (currentlyEnabled && getSelectedCountSeries().length <= 1) {
+      return
+    }
+    countsSeriesSelection[key] = !currentlyEnabled
+    saveCountsSeriesSelection(countsSeriesSelection)
+    renderCountsSeriesSelector()
+    renderCountsMix(currentFilteredRuns)
   })
   $resetFilters.on('click', function () {
     $limit.val('500')
@@ -2041,6 +2186,10 @@ $(document).ready(function () {
     const runKey = $(this).data('runKey') || $(this).attr('data-run-key')
     showRunDetails(runKey)
   })
+  $tableBody.on('click', '[data-section-details="1"]', function () {
+    const runKey = $(this).data('runKey') || $(this).attr('data-run-key')
+    showSectionDetails(runKey)
+  })
   $('#logscan-trends-table thead').on('click', '.logscan-sort-button', function () {
     const key = $(this).data('sort')
     if (!key) return
@@ -2052,6 +2201,7 @@ $(document).ready(function () {
     }
     applyFiltersAndRender()
   })
+  renderCountsSeriesSelector()
   checkMissingDownload()
   fetchRuns()
   fetchReingestStatus()

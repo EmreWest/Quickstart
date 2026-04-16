@@ -21,6 +21,7 @@ let lastLogStatsTotal = null
 let logStatsPollCounter = 0
 let lastLogscanPayload = null
 let logscanPollCounter = 0
+let finalLogscanAnalyzeTriggered = false
 let lastRunProgressPayload = null
 
 const _qsEnvEl = document.getElementById('qs-env')
@@ -749,31 +750,12 @@ $(document).ready(function () {
     new bootstrap.Tooltip(tooltipTriggerEl, { html: true })
   })
 
-  $('#copy-command').on('click', function () {
-    const command = $('#run-command-output').text().trim()
-    if (!command || command.startsWith('⚠️')) return
-
-    // Try clipboard API
+  function copyTextToClipboard (text) {
+    if (!text) return Promise.reject(new Error('Empty text'))
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(command).then(() => {
-        showCopySuccess()
-      }).catch(() => {
-        fallbackCopy(command)
-      })
-    } else {
-      fallbackCopy(command)
+      return navigator.clipboard.writeText(text)
     }
-
-    function showCopySuccess () {
-      $('#copy-icon').removeClass('bi-clipboard').addClass('bi-check2')
-      $('#copy-text').text('Copied')
-      setTimeout(() => {
-        $('#copy-icon').removeClass('bi-check2').addClass('bi-clipboard')
-        $('#copy-text').text('Copy')
-      }, 1500)
-    }
-
-    function fallbackCopy (text) {
+    return new Promise((resolve, reject) => {
       const textarea = document.createElement('textarea')
       textarea.value = text
       textarea.setAttribute('readonly', '')
@@ -781,20 +763,44 @@ $(document).ready(function () {
       textarea.style.left = '-9999px'
       document.body.appendChild(textarea)
       textarea.select()
-
       try {
         const success = document.execCommand('copy')
-        if (success) {
-          showCopySuccess()
-        } else {
-          showToast('error', 'Copy failed. Please copy manually.')
-        }
+        document.body.removeChild(textarea)
+        if (success) resolve()
+        else reject(new Error('Copy failed'))
       } catch (err) {
-        showToast('error', 'Copy failed. Please copy manually.')
+        document.body.removeChild(textarea)
+        reject(err)
       }
+    })
+  }
 
-      document.body.removeChild(textarea)
-    }
+  function showCopyButtonSuccess (iconSelector, textSelector) {
+    const $icon = $(iconSelector)
+    const $text = $(textSelector)
+    $icon.removeClass('bi-files bi-clipboard').addClass('bi-check2')
+    $text.text('Copied')
+    setTimeout(() => {
+      $icon.removeClass('bi-check2').addClass('bi-files')
+      $text.text('Copy')
+    }, 1500)
+  }
+
+  $('#copy-command').on('click', function () {
+    const command = $('#run-command-output').text().trim()
+    if (!command || command.startsWith('⚠️')) return
+
+    copyTextToClipboard(command)
+      .then(() => showCopyButtonSuccess('#copy-icon', '#copy-text'))
+      .catch(() => showToast('error', 'Copy failed. Please copy manually.'))
+  })
+
+  $('#copy-recovery-command').on('click', function () {
+    const command = $('#recovery-command-output').text().trim()
+    if (!command) return
+    copyTextToClipboard(command)
+      .then(() => showCopyButtonSuccess('#copy-recovery-icon', '#copy-recovery-text'))
+      .catch(() => showToast('error', 'Copy failed. Please copy manually.'))
   })
 
   function hideRunCommandSectionUntilValidated () {
@@ -1695,10 +1701,10 @@ $(document).ready(function () {
     }
   }
 
-  function fetchLogscanAnalysis () {
+  function fetchLogscanAnalysis (force = false) {
     if (!$logscanPanel.length) return
     logscanPollCounter += 1
-    const shouldFetch = (logscanPollCounter % 5 === 0) || !lastLogscanPayload
+    const shouldFetch = force || (logscanPollCounter % 5 === 0) || !lastLogscanPayload
     if (!shouldFetch) return
 
     fetch('/logscan/analyze')
@@ -2275,6 +2281,7 @@ $(document).ready(function () {
 
         // Handle Kometa process states
         if (data.status === 'running') {
+          finalLogscanAnalyzeTriggered = false
           // Kometa is actively running → keep Run disabled, allow Stop
           $runNow.prop('disabled', true).html('<i class="bi bi-play-fill me-1"></i> Run Now')
           $stopNow.removeClass('d-none').prop('disabled', false)
@@ -2297,6 +2304,10 @@ $(document).ready(function () {
         updateRunNowState()
 
         if (data.status === 'done') {
+          if (!finalLogscanAnalyzeTriggered) {
+            finalLogscanAnalyzeTriggered = true
+            fetchLogscanAnalysis(true)
+          }
           if (data.return_code === 0) {
             $('#run-output-log').append('\n✅ Kometa finished successfully.')
           } else {
