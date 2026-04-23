@@ -130,6 +130,71 @@ def _to_number(value):
     return None
 
 
+def _format_playlist_files(libraries_list):
+    return {
+        "playlist_files": [
+            {
+                "default": "playlist",
+                "template_variables": {"libraries": libraries_list},
+            }
+        ]
+    }
+
+
+def _playlist_libraries_from_library_toggles(nested_libraries_data):
+    if not isinstance(nested_libraries_data, dict):
+        return False, []
+
+    has_playlist_toggle = any(isinstance(key, str) and key.endswith("-playlist") for key in nested_libraries_data)
+    playlist_libraries = []
+    seen = set()
+
+    for key, value in nested_libraries_data.items():
+        if not isinstance(key, str) or not key.endswith("-library"):
+            continue
+        if value in [None, "", False]:
+            continue
+        prefix = key[: -len("-library")]
+        include_playlist = _coerce_bool(nested_libraries_data.get(f"{prefix}-playlist"))
+        if include_playlist is not True:
+            continue
+        library_name = str(value).strip()
+        if library_name and library_name not in seen:
+            playlist_libraries.append(library_name)
+            seen.add(library_name)
+
+    return has_playlist_toggle, playlist_libraries
+
+
+def _legacy_playlist_libraries_from_settings():
+    settings = persistence.retrieve_settings("027-playlist_files") or {}
+    playlist_payload = settings.get("playlist_files", {}) if isinstance(settings, dict) else {}
+    if isinstance(playlist_payload, dict) and isinstance(playlist_payload.get("playlist_files"), dict):
+        playlist_payload = playlist_payload.get("playlist_files", {})
+    raw_libraries = playlist_payload.get("libraries", "") if isinstance(playlist_payload, dict) else ""
+    if isinstance(raw_libraries, list):
+        return [str(item).strip() for item in raw_libraries if str(item).strip()]
+    return [item.strip() for item in str(raw_libraries or "").split(",") if item.strip()]
+
+
+def _legacy_playlist_libraries_for_selected_libraries(nested_libraries_data):
+    legacy_names = set(_legacy_playlist_libraries_from_settings())
+    if not legacy_names or not isinstance(nested_libraries_data, dict):
+        return []
+
+    selected_libraries = []
+    seen = set()
+    for key, value in nested_libraries_data.items():
+        if not isinstance(key, str) or not key.endswith("-library"):
+            continue
+        library_name = str(value or "").strip()
+        if library_name and library_name in legacy_names and library_name not in seen:
+            selected_libraries.append(library_name)
+            seen.add(library_name)
+
+    return selected_libraries
+
+
 def _coerce_string_list(values):
     cleaned = []
     seen = set()
@@ -2090,6 +2155,18 @@ def build_config(header_style="standard", config_name=None):
     header_art = {}
     library_types = {}
 
+    def header_for_section(section_key, display_name):
+        if section_key in header_art:
+            return header_art[section_key]
+        if header_style == "none":
+            return ""
+        if header_style == "single line" or helpers.contains_non_latin(display_name):
+            return "#==================== " + display_name + " ====================#"
+        try:
+            return add_border_to_ascii_art(pyfiglet.figlet_format(display_name, font=header_style))
+        except pyfiglet.FontNotFound:
+            return "#==================== " + display_name + " ====================#"
+
     # Process sections and generate header art
     for name in sections:
         item = sections[name]
@@ -2142,14 +2219,7 @@ def build_config(header_style="standard", config_name=None):
             helpers.ts_log(f"Processed libraries list: {libraries_value}", level="DEBUG")
 
         # Format playlist_files data
-        formatted_playlist_files = {
-            "playlist_files": [
-                {
-                    "default": "playlist",
-                    "template_variables": {"libraries": libraries_list},
-                }
-            ]
-        }
+        formatted_playlist_files = _format_playlist_files(libraries_list)
         if app.config["QS_DEBUG"]:
             helpers.ts_log(f"Formatted playlist_files data:", formatted_playlist_files, level="DEBUG")
 
@@ -2287,6 +2357,16 @@ def build_config(header_style="standard", config_name=None):
             show_top_level,
         )
         config_data["libraries"] = libraries_section
+        has_playlist_toggle, playlist_libraries = _playlist_libraries_from_library_toggles(nested_libraries_data)
+        if has_playlist_toggle:
+            if playlist_libraries:
+                config_data["playlist_files"] = _format_playlist_files(playlist_libraries)
+            else:
+                config_data.pop("playlist_files", None)
+        else:
+            legacy_playlist_libraries = _legacy_playlist_libraries_for_selected_libraries(nested_libraries_data)
+            if legacy_playlist_libraries:
+                config_data["playlist_files"] = _format_playlist_files(legacy_playlist_libraries)
         if app.config["QS_DEBUG"]:
             helpers.ts_log(f"Final Libraries Section: {libraries_section}", level="DEBUG")
 
@@ -2651,7 +2731,7 @@ def build_config(header_style="standard", config_name=None):
     for section_key, section_stem in ordered_sections:
         if section_key in config_data:
             section_data = config_data[section_key]
-            section_art = header_art[section_key]
+            section_art = header_for_section(section_key, helpers.user_visible_name(section_key))
             yaml_content += dump_section(section_art, section_key, section_data)
 
     validated = False

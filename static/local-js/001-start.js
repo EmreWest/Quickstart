@@ -78,6 +78,8 @@ function setButtonSpinner (button, text) {
 document.addEventListener('DOMContentLoaded', function () {
   const configSelector = document.getElementById('configSelector')
   const newConfigInput = document.getElementById('newConfigName')
+  const saveConfigRow = document.getElementById('saveConfigRow')
+  const saveConfigButton = document.getElementById('saveConfigButton')
   const resetConfigButton = document.getElementById('resetConfigButton')
   const deleteConfigButton = document.getElementById('deleteConfigButton')
   const renameConfigButton = document.getElementById('renameConfigButton')
@@ -167,6 +169,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const box = document.getElementById('newConfigInput')
     if (box) box.classList.toggle('d-none', !(isAddConfig || onlyAddConfigAvailable))
+
+    const showSave = isAddConfig || onlyAddConfigAvailable
+    if (saveConfigRow) saveConfigRow.classList.toggle('d-none', !showSave)
+
+    if (saveConfigButton) {
+      const proposed = sanitizeConfigName((newConfigInput && newConfigInput.value) || '').trim()
+      saveConfigButton.disabled = !showSave || !proposed
+    }
   }
 
   function updateConfigBadge (name) {
@@ -181,28 +191,73 @@ document.addEventListener('DOMContentLoaded', function () {
     label.appendChild(icon)
   }
 
+  function updateHeaderConfigName (name) {
+    if (!name) return
+    document.querySelectorAll('.qs-main-page-meta-value').forEach((node) => {
+      node.textContent = name
+    })
+  }
+
+  function upsertConfigOption (name) {
+    if (!configSelector || !name) return
+    const existing = Array.from(configSelector.options).find(option => option.value === name)
+    if (existing) return existing
+
+    const option = document.createElement('option')
+    option.value = name
+    option.textContent = name
+    configSelector.appendChild(option)
+    return option
+  }
+
+  function refreshWorkspaceStatusNow () {
+    if (window.QSWorkspaceStatus && typeof window.QSWorkspaceStatus.refresh === 'function') {
+      window.QSWorkspaceStatus.refresh({ immediate: true })
+    }
+    document.dispatchEvent(new CustomEvent('qs:workspace-data-changed', { detail: { source: 'start-config-activate', delayMs: 0 } }))
+  }
+
+  function applyActiveConfigUi (name) {
+    if (!name) return
+    if (window.pageInfo) window.pageInfo.config_name = name
+    updateConfigBadge(name)
+    updateHeaderConfigName(name)
+    upsertConfigOption(name)
+    if (configSelector) configSelector.value = name
+    updateButtonState()
+    refreshWorkspaceStatusNow()
+  }
+
+  async function activateConfig (name) {
+    const normalized = sanitizeConfigName(name)
+    if (!normalized) {
+      throw new Error('Please enter a valid config name.')
+    }
+    const res = await fetch('/activate-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: normalized })
+    })
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to activate config.')
+    }
+    return data
+  }
+
   async function syncSelectedConfig () {
     if (!configSelector) return
     const selected = configSelector.value
     if (!selected || selected === 'add_config') return
 
     if (window.pageInfo && window.pageInfo.config_name === selected) {
-      updateConfigBadge(selected)
+      applyActiveConfigUi(selected)
       return
     }
 
     try {
-      const res = await fetch('/switch-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: selected })
-      })
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to switch configs.')
-      }
-      if (window.pageInfo) window.pageInfo.config_name = data.name
-      updateConfigBadge(data.name)
+      const data = await activateConfig(selected)
+      applyActiveConfigUi(data.name)
     } catch (err) {
       showToast('error', err.message || 'Failed to switch configs.')
     }
@@ -412,6 +467,14 @@ document.addEventListener('DOMContentLoaded', function () {
     newConfigInput.addEventListener('input', function () {
       newConfigInput.value = sanitizeConfigName(newConfigInput.value)
       checkDuplicateConfigName()
+      updateButtonState()
+    })
+    newConfigInput.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+      if (saveConfigButton && !saveConfigButton.disabled) {
+        saveConfigButton.click()
+      }
     })
   }
 
@@ -546,6 +609,39 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  if (saveConfigButton) {
+    saveConfigButton.addEventListener('click', async () => {
+      if (!newConfigInput) return
+
+      const proposed = sanitizeConfigName(newConfigInput.value)
+      newConfigInput.value = proposed
+      removeValidationMessages(newConfigInput)
+      if (!proposed) {
+        applyValidationStyles(newConfigInput, 'error', 'Enter a config name.')
+        showToast('error', 'Please enter a config name.')
+        updateButtonState()
+        return
+      }
+
+      saveConfigButton.disabled = true
+      const originalHtml = saveConfigButton.innerHTML
+      saveConfigButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Saving...'
+      try {
+        const data = await activateConfig(proposed)
+        applyActiveConfigUi(data.name)
+        if (newConfigInput) removeValidationMessages(newConfigInput)
+        showToast('success', data.created ? `Config '${data.name}' created.` : `Config '${data.name}' loaded.`)
+        window.setTimeout(() => window.location.reload(), 200)
+      } catch (err) {
+        applyValidationStyles(newConfigInput, 'error', err.message || 'Unable to save config.')
+        showToast('error', err.message || 'Unable to save config.')
+      } finally {
+        saveConfigButton.innerHTML = originalHtml
+        updateButtonState()
+      }
+    })
+  }
+
   function setImportCredentialFlags (options) {
     importNeedsPlexCredentials = Boolean(options && options.needsPlex)
     importNeedsTmdbCredentials = Boolean(options && options.needsTmdb)
@@ -596,7 +692,6 @@ document.addEventListener('DOMContentLoaded', function () {
     anidb: 'AniDB',
     webhooks: 'Webhooks',
     settings: 'Settings',
-    playlist_files: 'Playlists',
     libraries: 'Libraries'
   }
 
@@ -604,7 +699,6 @@ document.addEventListener('DOMContentLoaded', function () {
     'plex',
     'tmdb',
     'libraries',
-    'playlist_files',
     'tautulli',
     'github',
     'omdb',
@@ -621,7 +715,7 @@ document.addEventListener('DOMContentLoaded', function () {
     'settings'
   ]
 
-  const mergeDefaultSelected = new Set(['libraries', 'playlist_files', 'settings'])
+  const mergeDefaultSelected = new Set(['libraries', 'settings'])
 
   function renderMergeSections (sections) {
     if (!importMergeSection || !importMergeSectionList) return
@@ -1234,13 +1328,17 @@ document.addEventListener('DOMContentLoaded', function () {
       confirmImportButton.disabled = true
       confirmImportButton.textContent = 'Importing...'
 
-      function showImportRedirectOverlay (message, detail) {
+      function showImportRedirectOverlay (message, detail, options = {}) {
         const existing = document.getElementById('qs-import-redirect')
         if (existing) {
           const msgEl = existing.querySelector('.qs-import-redirect-message')
           const detailEl = existing.querySelector('.qs-import-redirect-detail')
+          const spinner = existing.querySelector('.qs-import-redirect-spinner')
+          const actionsEl = existing.querySelector('.qs-import-redirect-actions')
           if (msgEl) msgEl.textContent = message || msgEl.textContent
           if (detailEl) detailEl.textContent = detail || detailEl.textContent
+          if (spinner) spinner.classList.toggle('d-none', Boolean(options.done))
+          renderImportRedirectActions(actionsEl, options.actions || [])
           return
         }
 
@@ -1264,32 +1362,37 @@ document.addEventListener('DOMContentLoaded', function () {
         card.style.cssText = 'background:#0f1113;border:1px solid #2b2f33;max-width:520px;width:100%;'
 
         const spinner = document.createElement('div')
-        spinner.className = 'spinner-border text-info mb-3'
+        spinner.className = 'spinner-border text-info mb-3 qs-import-redirect-spinner'
         spinner.setAttribute('role', 'status')
         spinner.setAttribute('aria-hidden', 'true')
+        spinner.classList.toggle('d-none', Boolean(options.done))
 
         const messageEl = document.createElement('div')
         messageEl.className = 'fw-semibold mb-1 qs-import-redirect-message'
-        messageEl.textContent = message || 'Import complete. Redirecting...'
+        messageEl.textContent = message || 'Import complete.'
 
         const detailEl = document.createElement('div')
         detailEl.className = 'small text-muted mb-3 qs-import-redirect-detail'
         detailEl.style.whiteSpace = 'pre-line'
-        detailEl.textContent = detail || 'Loading Final Validation. This can take up to 30 seconds.'
+        detailEl.textContent = detail || 'Validating imported config...'
 
         const button = document.createElement('button')
         button.type = 'button'
         button.className = 'btn btn-sm btn-outline-info qs-import-redirect-btn d-none'
-        button.textContent = 'Go to Final Validation'
+        button.textContent = 'Open Start'
 
-        card.append(spinner, messageEl, detailEl, button)
+        const actionsEl = document.createElement('div')
+        actionsEl.className = 'qs-import-redirect-actions d-flex flex-wrap justify-content-center gap-2 mb-3'
+        renderImportRedirectActions(actionsEl, options.actions || [])
+
+        card.append(spinner, messageEl, detailEl, actionsEl, button)
         overlay.appendChild(card)
 
         document.body.appendChild(overlay)
         const redirectBtn = overlay.querySelector('.qs-import-redirect-btn')
         if (redirectBtn) {
           redirectBtn.addEventListener('click', () => {
-            window.location = '/step/900-final'
+            window.location = '/step/001-start'
           })
           setTimeout(() => {
             if (document.getElementById('qs-import-redirect')) {
@@ -1297,6 +1400,93 @@ document.addEventListener('DOMContentLoaded', function () {
             }
           }, 60000)
         }
+      }
+
+      function renderImportRedirectActions (container, actions) {
+        if (!container) return
+        container.replaceChildren()
+        if (!Array.isArray(actions) || !actions.length) {
+          container.classList.add('d-none')
+          return
+        }
+        container.classList.remove('d-none')
+        actions.forEach(action => {
+          if (!action || !action.href || !action.label) return
+          const link = document.createElement('a')
+          link.className = action.className || 'btn btn-sm btn-outline-warning'
+          link.href = action.href
+          link.textContent = action.label
+          container.appendChild(link)
+        })
+      }
+
+      function summarizeBulkValidation (data) {
+        const summary = data && data.summary ? data.summary : {}
+        const counts = window.QSBulkValidation && typeof window.QSBulkValidation.getSummaryCounts === 'function'
+          ? window.QSBulkValidation.getSummaryCounts(summary)
+          : {
+              validated: Number(summary.validated || 0),
+              failed: Number(summary.failed || 0),
+              skipped: Number(summary.skipped || 0)
+            }
+        return `Validation complete. ${counts.validated} passed, ${counts.failed} failed, ${counts.skipped} skipped.`
+      }
+
+      function summarizeImportResult (data) {
+        const sections = Array.isArray(data.imported_sections) ? data.imported_sections.length : 0
+        const skippedSections = Array.isArray(data.skipped_sections) ? data.skipped_sections.length : 0
+        const copiedFonts = Array.isArray(data.fonts_copied) ? data.fonts_copied.length : 0
+        const skippedFonts = Array.isArray(data.fonts_skipped) ? data.fonts_skipped.length : 0
+        const mapping = data.mapping_summary && typeof data.mapping_summary === 'object' ? data.mapping_summary : {}
+        const mapped = Number(mapping.mapped || 0)
+        const ignored = Number(mapping.ignored || 0)
+        const parts = [`${sections} section${sections === 1 ? '' : 's'} imported`]
+        if (skippedSections) parts.push(`${skippedSections} skipped`)
+        if (mapped || ignored) parts.push(`${mapped} mapped, ${ignored} ignored`)
+        if (copiedFonts || skippedFonts) parts.push(`${copiedFonts} font${copiedFonts === 1 ? '' : 's'} copied, ${skippedFonts} skipped`)
+        return parts.join(' • ')
+      }
+
+      function stepLabelForValidationKey (stepKey) {
+        const labels = {
+          '010-plex': 'Plex',
+          '020-tmdb': 'TMDb',
+          '025-libraries': 'Libraries',
+          '030-tautulli': 'Tautulli',
+          '040-github': 'GitHub',
+          '050-omdb': 'OMDb',
+          '060-mdblist': 'MDBList',
+          '070-notifiarr': 'Notifiarr',
+          '080-gotify': 'Gotify',
+          '085-ntfy': 'ntfy',
+          '090-webhooks': 'Webhooks',
+          '100-anidb': 'AniDB',
+          '110-radarr': 'Radarr',
+          '120-sonarr': 'Sonarr',
+          '130-trakt': 'Trakt',
+          '140-mal': 'MyAnimeList',
+          '150-settings': 'Settings'
+        }
+        return labels[stepKey] || String(stepKey || '').replace(/^\d+-/, '')
+      }
+
+      function validationFailureActions (data) {
+        const results = data && data.results && typeof data.results === 'object' ? data.results : {}
+        return Object.keys(results)
+          .filter(stepKey => results[stepKey] && results[stepKey].status === 'failed')
+          .slice(0, 4)
+          .map(stepKey => ({
+            href: `/step/${encodeURIComponent(stepKey)}`,
+            label: stepLabelForValidationKey(stepKey),
+            className: 'btn btn-sm btn-outline-warning'
+          }))
+      }
+
+      async function runImportBulkValidation () {
+        if (!window.QSBulkValidation || typeof window.QSBulkValidation.run !== 'function') {
+          throw new Error('Bulk validation is unavailable.')
+        }
+        return window.QSBulkValidation.run({ source: 'import-confirm', silentToast: true })
       }
       try {
         const libraryMapping = {}
@@ -1326,26 +1516,39 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!res.ok || !data.success) {
           throw new Error(data.message || 'Import failed.')
         }
-        let msg = `Imported config '${data.config_name}'.`
-        if (Array.isArray(data.fonts_copied) && data.fonts_copied.length) {
-          msg += ` Fonts added: ${data.fonts_copied.length}.`
-        }
-        const skippedExisting = Array.isArray(data.fonts_skipped_existing) ? data.fonts_skipped_existing : []
-        const skippedFailed = Array.isArray(data.fonts_skipped_failed) ? data.fonts_skipped_failed : []
-        if (skippedExisting.length) {
-          msg += ` Fonts skipped (already exists): ${skippedExisting.length}.`
-        }
-        if (skippedFailed.length) {
-          msg += ` Fonts skipped (copy failed): ${skippedFailed.length}.`
-        }
-        if (!skippedExisting.length && !skippedFailed.length && Array.isArray(data.fonts_skipped) && data.fonts_skipped.length) {
-          msg += ` Fonts skipped: ${data.fonts_skipped.length}.`
-        }
-        const guidance = 'Import complete. Go to Final Validation and click Validate Configured Services to check all services, then fix any failures (especially interactive pages).'
-        showImportRedirectOverlay(msg, `${guidance}\nLoading Final Validation. This can take up to 30 seconds.`)
+        const msg = `Imported config '${data.config_name}'.`
+        const importSummaryText = summarizeImportResult(data)
         const modal = bootstrap.Modal.getInstance(importConfigModalEl)
         if (modal) modal.hide()
-        setTimeout(() => { window.location = '/step/900-final' }, 1200)
+        showImportRedirectOverlay(msg, `${importSummaryText}\nValidating imported config...`)
+        try {
+          const validationData = await runImportBulkValidation()
+          const actions = validationFailureActions(validationData)
+          if (actions.length) {
+            actions.push({ href: '/step/001-start', label: 'Open Start', className: 'btn btn-sm btn-outline-info' })
+            showImportRedirectOverlay(
+              'Import complete.',
+              `${importSummaryText}\n${summarizeBulkValidation(validationData)} Review failed pages below.`,
+              { done: true, actions }
+            )
+          } else {
+            showImportRedirectOverlay(
+              'Import complete.',
+              `${importSummaryText}\n${summarizeBulkValidation(validationData)} Reloading Start...`,
+              { done: true }
+            )
+            setTimeout(() => { window.location = '/step/001-start' }, 900)
+          }
+        } catch (validationErr) {
+          showImportRedirectOverlay(
+            'Import complete.',
+            `${importSummaryText}\n${validationErr.message || 'Validation failed.'}`,
+            {
+              done: true,
+              actions: [{ href: '/step/001-start', label: 'Open Start', className: 'btn btn-sm btn-outline-info' }]
+            }
+          )
+        }
       } catch (err) {
         const message = err.message || 'Import failed.'
         if (/import token is invalid/i.test(message)) {

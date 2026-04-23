@@ -1,4 +1,4 @@
-/* global EventHandler, ValidationHandler, OverlayHandler, Sortable, showToast, setupParentChildToggleSync, bootstrap, FontFace, PathValidation, DOMParser */
+/* global EventHandler, ValidationHandler, OverlayHandler, Sortable, showToast, setupParentChildToggleSync, bootstrap, FontFace, PathValidation, DOMParser, showNavigationLoadingOverlay, hideNavigationLoadingOverlay */
 
 document.addEventListener('DOMContentLoaded', function () {
   console.log('[DEBUG] Initializing Libraries...')
@@ -59,6 +59,50 @@ document.addEventListener('DOMContentLoaded', function () {
     const copyModal = copyModalEl ? new bootstrap.Modal(copyModalEl) : null
     let activeLibraryId = null
     let loadRequestId = 0
+    const dependencyHintConfigs = {
+      tautulli: {
+        stepKey: '030-tautulli',
+        endpoint: '/libraries_tautulli_dependency_hint',
+        windowKey: 'QS_TAUTULLI_REQUIREMENT_REASONS'
+      },
+      omdb: {
+        stepKey: '050-omdb',
+        endpoint: '/libraries_omdb_dependency_hint',
+        windowKey: 'QS_OMDB_REQUIREMENT_REASONS'
+      },
+      mdblist: {
+        stepKey: '060-mdblist',
+        endpoint: '/libraries_mdblist_dependency_hint',
+        windowKey: 'QS_MDBLIST_REQUIREMENT_REASONS'
+      },
+      anidb: {
+        stepKey: '100-anidb',
+        endpoint: '/libraries_anidb_dependency_hint',
+        windowKey: 'QS_ANIDB_REQUIREMENT_REASONS'
+      },
+      radarr: {
+        stepKey: '110-radarr',
+        endpoint: '/libraries_radarr_dependency_hint',
+        windowKey: 'QS_RADARR_REQUIREMENT_REASONS'
+      },
+      sonarr: {
+        stepKey: '120-sonarr',
+        endpoint: '/libraries_sonarr_dependency_hint',
+        windowKey: 'QS_SONARR_REQUIREMENT_REASONS'
+      },
+      trakt: {
+        stepKey: '130-trakt',
+        endpoint: '/libraries_trakt_dependency_hint',
+        windowKey: 'QS_TRAKT_REQUIREMENT_REASONS'
+      },
+      mal: {
+        stepKey: '140-mal',
+        endpoint: '/libraries_mal_dependency_hint',
+        windowKey: 'QS_MAL_REQUIREMENT_REASONS'
+      }
+    }
+    let dependencyHintRefreshTimer = null
+    let dependencyHintRequestToken = 0
 
     // Ensure hidden "false" inputs don't submit alongside checked checkboxes with the same name
     function syncHiddenCheckboxPairs (scope) {
@@ -216,6 +260,180 @@ document.addEventListener('DOMContentLoaded', function () {
 
         syncActive()
       })
+    }
+
+    function normalizeDependencyHintReasons (reasons) {
+      if (!Array.isArray(reasons)) return []
+      return reasons
+        .map(reason => String(reason || '').trim())
+        .filter(Boolean)
+    }
+
+    function parseStepOrder (stepKey) {
+      const match = String(stepKey || '').match(/^(\d+)-/)
+      if (!match) return Number.MAX_SAFE_INTEGER
+      const parsed = Number.parseInt(match[1], 10)
+      return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER
+    }
+
+    function insertStepByOrder (container, stepButton) {
+      if (!container || !stepButton) return
+      const targetOrder = parseStepOrder(stepButton.dataset.stepKey)
+      const siblings = Array.from(container.querySelectorAll('.qs-step-link[data-step-key]')).filter(el => el !== stepButton)
+      const nextSibling = siblings.find(el => parseStepOrder(el.dataset.stepKey) > targetOrder)
+      if (nextSibling) {
+        container.insertBefore(stepButton, nextSibling)
+      } else {
+        container.appendChild(stepButton)
+      }
+    }
+
+    function syncDependencyStepGrouping (providerKey, isRequired) {
+      const dependencyConfig = dependencyHintConfigs[providerKey]
+      if (!dependencyConfig) return
+      const requiredList = document.querySelector('.qs-step-group[data-step-group="required"] .qs-step-group-list')
+      const optionalList = document.querySelector('.qs-step-group[data-step-group="optional"] .qs-step-group-list')
+      if (!requiredList || !optionalList) return
+
+      const stepButton = document.querySelector(`.qs-step-group-list .qs-step-link[data-step-key="${dependencyConfig.stepKey}"]`)
+      if (!stepButton) return
+
+      const targetList = isRequired ? requiredList : optionalList
+      if (stepButton.parentElement === targetList) return
+
+      insertStepByOrder(targetList, stepButton)
+      if (window.QSValidationCallouts && typeof window.QSValidationCallouts.refreshSidebar === 'function') {
+        window.QSValidationCallouts.refreshSidebar()
+      }
+    }
+
+    function applyDependencyRequirementHint (providerKey, reasons, options = {}) {
+      const dependencyConfig = dependencyHintConfigs[providerKey]
+      if (!dependencyConfig) return
+
+      const normalized = normalizeDependencyHintReasons(reasons)
+      const refreshUi = options.refreshUi !== false
+      syncDependencyStepGrouping(providerKey, normalized.length > 0)
+
+      if (Array.isArray(window.QS_REQUIRED_KEYS) && Array.isArray(window.QS_OPTIONAL_KEYS)) {
+        const shouldRequire = normalized.length > 0
+        const required = window.QS_REQUIRED_KEYS.filter(key => key !== dependencyConfig.stepKey)
+        const optional = window.QS_OPTIONAL_KEYS.filter(key => key !== dependencyConfig.stepKey)
+        if (shouldRequire) {
+          required.push(dependencyConfig.stepKey)
+        } else {
+          optional.push(dependencyConfig.stepKey)
+        }
+        window.QS_REQUIRED_KEYS = required
+        window.QS_OPTIONAL_KEYS = optional
+      }
+      window[dependencyConfig.windowKey] = normalized
+
+      const hints = document.querySelectorAll(`[data-qs-dependency-hint="${providerKey}"]`)
+      hints.forEach((hint) => {
+        const lines = hint.querySelector('[data-qs-dependency-lines]')
+        if (!lines) return
+
+        lines.replaceChildren()
+        if (!normalized.length) {
+          hint.classList.add('d-none')
+          return
+        }
+
+        hint.classList.remove('d-none')
+        const visibleCount = 2
+        normalized.slice(0, visibleCount).forEach((reason) => {
+          const row = document.createElement('div')
+          row.className = 'qs-dependency-hint-line'
+          row.textContent = reason
+          lines.appendChild(row)
+        })
+
+        if (normalized.length > visibleCount) {
+          const more = document.createElement('div')
+          more.className = 'qs-dependency-hint-line'
+          more.textContent = `+${normalized.length - visibleCount} more...`
+          lines.appendChild(more)
+        }
+      })
+
+      if (refreshUi) {
+        if (window.QSValidationCallouts && typeof window.QSValidationCallouts.refresh === 'function') {
+          window.QSValidationCallouts.refresh()
+        }
+        if (window.QSWorkspaceStatus && typeof window.QSWorkspaceStatus.recalculateFromSidebar === 'function') {
+          window.QSWorkspaceStatus.recalculateFromSidebar()
+        }
+      }
+    }
+
+    function requestDependencyRequirementHintsNow () {
+      const card = libraryContainer ? libraryContainer.firstElementChild : null
+      if (!card || !activeLibraryId) return Promise.resolve()
+
+      const payload = {
+        source_library_id: activeLibraryId,
+        source_payload: buildPayloadFromCard(card)
+      }
+      const currentToken = ++dependencyHintRequestToken
+      const requests = Object.entries(dependencyHintConfigs).map(([providerKey, config]) => {
+        return fetch(config.endpoint, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+          .then(res => {
+            if (!res.ok) throw new Error(`${providerKey} hint request failed: ${res.status}`)
+            return res.json()
+          })
+          .then(data => ({ providerKey, reasons: data && data.success ? data.reasons : [] }))
+          .catch(() => ({ providerKey, reasons: [] }))
+      })
+
+      return Promise.all(requests).then((results) => {
+        if (currentToken !== dependencyHintRequestToken) return
+        results.forEach(({ providerKey, reasons }) => {
+          applyDependencyRequirementHint(providerKey, reasons, { refreshUi: false })
+        })
+        if (window.QSValidationCallouts && typeof window.QSValidationCallouts.refresh === 'function') {
+          window.QSValidationCallouts.refresh()
+        }
+        if (window.QSWorkspaceStatus && typeof window.QSWorkspaceStatus.recalculateFromSidebar === 'function') {
+          window.QSWorkspaceStatus.recalculateFromSidebar()
+        }
+      })
+    }
+
+    function scheduleDependencyRequirementHintRefresh (delayMs = 220) {
+      if (dependencyHintRefreshTimer) {
+        clearTimeout(dependencyHintRefreshTimer)
+        dependencyHintRefreshTimer = null
+      }
+      dependencyHintRefreshTimer = setTimeout(() => {
+        dependencyHintRefreshTimer = null
+        requestDependencyRequirementHintsNow()
+      }, Math.max(0, Number(delayMs) || 0))
+    }
+
+    function bindDependencyRequirementHintLiveRefresh (card) {
+      if (!card || card.dataset.dependencyHintWatcherBound === 'true') return
+
+      const shouldTrack = (name) => {
+        const fieldName = String(name || '')
+        if (!fieldName) return false
+        return /-library$|-collection_|-template_collection_|-attribute_|-overlay_|-template_overlay_/i.test(fieldName)
+      }
+
+      const onFieldInteraction = (event) => {
+        const target = event && event.target
+        if (!target || !shouldTrack(target.name)) return
+        scheduleDependencyRequirementHintRefresh(160)
+      }
+
+      card.addEventListener('input', onFieldInteraction)
+      card.addEventListener('change', onFieldInteraction)
+      card.dataset.dependencyHintWatcherBound = 'true'
     }
 
     function initRelativeYearInputs (scope) {
@@ -982,6 +1200,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function wireIncludeToggle (card, libraryId) {
       if (!libraryPicker || !card) return
       const toggle = card.querySelector('.include-library-toggle')
+      const playlistToggle = card.querySelector('.playlist-library-toggle')
       const option = libraryPicker.querySelector(`option[value="${libraryId}"]`)
       const targetInputId = toggle?.dataset.targetInput
       const targetInput = targetInputId ? document.getElementById(targetInputId) : null
@@ -994,6 +1213,13 @@ document.addEventListener('DOMContentLoaded', function () {
         status.textContent = included ? 'Included in YAML' : 'Excluded from YAML'
         status.classList.toggle('bg-success', included)
         status.classList.toggle('bg-secondary', !included)
+        if (playlistToggle) {
+          if (!included) {
+            playlistToggle.checked = false
+          }
+          playlistToggle.disabled = !included
+          playlistToggle.closest('.form-check')?.classList.toggle('opacity-50', !included)
+        }
       }
 
       toggle.addEventListener('change', () => {
@@ -1005,6 +1231,15 @@ document.addEventListener('DOMContentLoaded', function () {
           ValidationHandler.updateValidationState()
         }
       })
+      if (playlistToggle && !playlistToggle.dataset.listenerAdded) {
+        playlistToggle.addEventListener('change', () => {
+          syncStatus()
+          if (typeof ValidationHandler !== 'undefined' && ValidationHandler.updateValidationState) {
+            ValidationHandler.updateValidationState()
+          }
+        })
+        playlistToggle.dataset.listenerAdded = 'true'
+      }
       syncStatus()
       toggle.dataset.listenerAdded = 'true'
     }
@@ -1046,10 +1281,10 @@ document.addEventListener('DOMContentLoaded', function () {
       setupMappingListHandlers('content_rating_mapper', card)
       wireOverlayDetailToggles(card)
       setupParentChildToggleVisibility(card)
-      setupAddMissingDependencies(card)
       if (typeof setupParentChildToggleSync === 'function') {
         setupParentChildToggleSync()
       }
+      setupAddMissingDependencies(card)
       wireOverlayTemplateSections(card)
       if (typeof OverlayHandler !== 'undefined' && OverlayHandler.initializeOverlayBoards) {
         OverlayHandler.initializeOverlayBoards(card)
@@ -1072,16 +1307,27 @@ document.addEventListener('DOMContentLoaded', function () {
       wireFontUploads(card)
       wireFontPreviews(card)
       wireFontPickerButtons(card)
+      bindDependencyRequirementHintLiveRefresh(card)
+      scheduleDependencyRequirementHintRefresh(0)
     }
 
     wireFontPickerModal()
 
     function buildPayloadFromCard (card) {
       const payload = {}
+      const checkboxNames = new Set(
+        Array.from(card.querySelectorAll('input[type="checkbox"][name]'))
+          .map(el => String(el.name || '').trim())
+          .filter(Boolean)
+      )
       card.querySelectorAll('input, select, textarea').forEach(el => {
         if (!el.name || el.disabled) return
         if (el.dataset && el.dataset.skipYaml === 'true') return
         if (el.type === 'file') return
+
+        if (el.type === 'hidden' && checkboxNames.has(String(el.name || '').trim())) {
+          return
+        }
 
         if (el.tagName === 'SELECT' && el.multiple) {
           payload[el.name] = Array.from(el.selectedOptions).map(opt => opt.value)
@@ -1107,6 +1353,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         payload[el.name] = el.value ?? ''
+      })
+      card.querySelectorAll('input.playlist-library-toggle[type="checkbox"][name]:disabled').forEach(el => {
+        payload[el.name] = 'false'
       })
       return payload
     }
@@ -1201,6 +1450,10 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
           if (data && data.success && typeof showToast === 'function') {
             showToast('success', `Autosaved ${friendlyName}.`)
+          }
+          if (data && data.success) {
+            scheduleDependencyRequirementHintRefresh(0)
+            document.dispatchEvent(new CustomEvent('qs:workspace-data-changed', { detail: { source: 'libraries-autosave', delayMs: 80 } }))
           }
           return data
         })
@@ -1332,6 +1585,8 @@ document.addEventListener('DOMContentLoaded', function () {
               const label = filtered.length === 1 ? 'library' : 'libraries'
               showToast('success', `Mirrored settings to ${filtered.length} ${label}.`)
             }
+            scheduleDependencyRequirementHintRefresh(0)
+            document.dispatchEvent(new CustomEvent('qs:workspace-data-changed', { detail: { source: 'libraries-copy', delayMs: 80 } }))
           })
           .catch(err => {
             console.error('[Copy] Failed to mirror library settings', err)
@@ -1352,7 +1607,7 @@ document.addEventListener('DOMContentLoaded', function () {
       copyConfirmBtn.addEventListener('click', onConfirm)
     }
 
-    function loadLibrary (libraryId) {
+    function loadLibrary (libraryId, context = 'switch') {
       if (libraryId === activeLibraryId) return
       const requestId = ++loadRequestId
       const setLoading = (flag) => {
@@ -1361,6 +1616,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (libraryPicker) {
           libraryPicker.disabled = !!flag
+        }
+        if (flag) {
+          if (typeof showNavigationLoadingOverlay === 'function') {
+            showNavigationLoadingOverlay(context === 'initial' ? 'library-initial' : 'library-switch')
+          }
+        } else if (typeof hideNavigationLoadingOverlay === 'function') {
+          hideNavigationLoadingOverlay()
         }
       }
 
@@ -1411,7 +1673,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (libraryPicker) {
       libraryPicker.addEventListener('change', (e) => {
-        loadLibrary(e.target.value)
+        loadLibrary(e.target.value, 'switch')
       })
 
       refreshPickerLabels()
@@ -1421,9 +1683,9 @@ document.addEventListener('DOMContentLoaded', function () {
         libraryPicker.querySelector('option[value]:not([value=""])')?.value
       if (configuredFirst) {
         libraryPicker.value = configuredFirst.value
-        loadLibrary(configuredFirst.value)
+        loadLibrary(configuredFirst.value, 'initial')
       } else if (firstLibrary) {
-        loadLibrary(firstLibrary)
+        loadLibrary(firstLibrary, 'initial')
       } else {
         libraryPicker.value = ''
       }
@@ -2515,12 +2777,10 @@ function setupAddMissingDependencies (scope) {
   const addMissingToggles = Array.from(root.querySelectorAll('input.template-child-toggle[id*="radarr_add_missing_"], input.template-child-toggle[id*="sonarr_add_missing_"]'))
   if (!addMissingToggles.length) return
 
-  const groupMap = new Map()
-
-  addMissingToggles.forEach(addToggle => {
+  const resolveDependency = (addToggle) => {
     const id = addToggle.id || ''
     const split = id.split('-template_collection_')
-    if (split.length !== 2) return
+    if (split.length !== 2) return null
     const prefix = split[0]
     const tail = split[1]
     let useTail = null
@@ -2533,34 +2793,47 @@ function setupAddMissingDependencies (scope) {
         useTail = `${sonarrMatch[1]}_use_${sonarrMatch[2]}`
       }
     }
-    if (!useTail) return
+    if (!useTail) return null
     const useToggle = document.getElementById(`${prefix}-template_collection_${useTail}`)
-    if (!useToggle) return
-
-    const list = groupMap.get(useToggle) || []
-    list.push(addToggle)
-    groupMap.set(useToggle, list)
-  })
-
-  const applyState = (useToggle, toggles) => {
-    const show = useToggle.checked
-    toggles.forEach(addToggle => {
-      const row = addToggle.closest('.form-check')
-      if (row) row.style.display = show ? '' : 'none'
-      addToggle.disabled = !show
-      if (!show) {
-        addToggle.checked = false
-        const hidden = document.querySelector(`input[type="hidden"][name="${addToggle.name}"]`)
-        if (hidden) hidden.value = 'false'
-      }
-    })
+    if (!useToggle) return null
+    const parentToggle = addToggle.dataset.parentToggle
+      ? document.getElementById(addToggle.dataset.parentToggle)
+      : null
+    return { useToggle, parentToggle }
   }
 
-  groupMap.forEach((toggles, useToggle) => {
-    if (useToggle.dataset.addMissingBound === 'true') return
-    useToggle.dataset.addMissingBound = 'true'
-    useToggle.addEventListener('change', () => applyState(useToggle, toggles))
-    applyState(useToggle, toggles)
+  const applyState = (addToggle) => {
+    const dependency = resolveDependency(addToggle)
+    if (!dependency) return
+    const { useToggle } = dependency
+    const useReady = useToggle.checked && !useToggle.disabled
+    const enabled = useReady
+    const row = addToggle.closest('.form-check')
+    if (row) row.style.display = useReady ? '' : 'none'
+    addToggle.disabled = !enabled
+    if (!enabled) {
+      addToggle.checked = false
+      const hidden = document.querySelector(`input[type="hidden"][name="${addToggle.name}"]`)
+      if (hidden) {
+        hidden.value = 'false'
+        hidden.disabled = false
+      }
+    }
+  }
+
+  addMissingToggles.forEach(addToggle => {
+    const dependency = resolveDependency(addToggle)
+    if (!dependency) return
+    const { useToggle, parentToggle } = dependency
+
+    if (addToggle.dataset.addMissingBound !== 'true') {
+      const refresh = () => applyState(addToggle)
+      useToggle.addEventListener('change', refresh)
+      if (parentToggle) parentToggle.addEventListener('change', refresh)
+      addToggle.dataset.addMissingBound = 'true'
+    }
+
+    applyState(addToggle)
   })
 }
 

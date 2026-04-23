@@ -57,6 +57,18 @@
     window.QS_SESSION_LIFETIME_DAYS = "{{ config.get('QS_SESSION_LIFETIME_DAYS', 30) }}";
     window.QS_FLASK_SESSION_DIR = {{ config.get('QS_FLASK_SESSION_DIR', '') | tojson }};
     window.QS_RESTART_NOTICE = {{ config.get('QS_RESTART_NOTICE') | tojson }};
+    window.QS_CURRENT_TEMPLATE = {{ (page_info.get('template_name', '') if page_info else '') | tojson }};
+    window.QS_REQUIRED_KEYS = {{ (required_keys if required_keys is defined else []) | tojson }};
+    window.QS_OPTIONAL_KEYS = {{ (optional_keys if optional_keys is defined else []) | tojson }};
+    window.QS_REVIEW_KEYS = {{ (review_keys if review_keys is defined else []) | tojson }};
+    window.QS_TAUTULLI_REQUIREMENT_REASONS = {{ (tautulli_requirement_reasons if tautulli_requirement_reasons is defined else []) | tojson }};
+    window.QS_OMDB_REQUIREMENT_REASONS = {{ (omdb_requirement_reasons if omdb_requirement_reasons is defined else []) | tojson }};
+    window.QS_MDBLIST_REQUIREMENT_REASONS = {{ (mdblist_requirement_reasons if mdblist_requirement_reasons is defined else []) | tojson }};
+    window.QS_ANIDB_REQUIREMENT_REASONS = {{ (anidb_requirement_reasons if anidb_requirement_reasons is defined else []) | tojson }};
+    window.QS_RADARR_REQUIREMENT_REASONS = {{ (radarr_requirement_reasons if radarr_requirement_reasons is defined else []) | tojson }};
+    window.QS_SONARR_REQUIREMENT_REASONS = {{ (sonarr_requirement_reasons if sonarr_requirement_reasons is defined else []) | tojson }};
+    window.QS_TRAKT_REQUIREMENT_REASONS = {{ (trakt_requirement_reasons if trakt_requirement_reasons is defined else []) | tojson }};
+    window.QS_MAL_REQUIREMENT_REASONS = {{ (mal_requirement_reasons if mal_requirement_reasons is defined else []) | tojson }};
   </script>
   <script type="text/javascript" src="{{ url_for('static', filename='local-js/000-base.js') }}"></script>
   <script type="text/javascript" src="{{ url_for('static', filename='local-js/pathValidation.js') }}"></script>
@@ -85,11 +97,12 @@
     </div>
   </div>
 
-  <div class="container">
-    <div class="content-wrapper">
+  <div class="qs-page-shell">
+    <div class="qs-page-container">
+      <div class="content-wrapper qs-content-wrapper">
       <!-- New Version Available Message for user-->
       {% if version_info and version_info.update_available %}
-      <div class="alert alert-danger text-center" role="alert" style="max-width: 900px; margin: 0 auto;">
+      <div class="alert alert-danger text-center qs-wide-alert" id="quickstart-update-alert" data-qs-update-alert role="alert">
         <i class="bi bi-arrow-up-circle"></i>
         A new version of Quickstart (<strong>{{ version_info.remote_version }}</strong>) is available!
 
@@ -128,10 +141,10 @@
         </a>
         {% endif %}
       </div>
-      <br>
+      <br data-qs-update-alert-spacer>
       {% endif %}
       <!-- Early Development Warning -->
-      <div class="alert alert-warning text-center early-warning" role="alert" style="max-width: 900px; margin: 0 auto;">
+      <div class="alert alert-warning text-center early-warning qs-wide-alert" data-qs-update-alert-anchor role="alert">
         <b>Quickstart is in early development.</b> Please provide feedback via the
         <a href="https://discord.com/channels/822460010649878528/1335372922306695198"
           target="_blank">quickstart-feedback Discord channel.</a>
@@ -139,6 +152,7 @@
       <hr class="hr page-top-divider">
 
       {% block content %}{% endblock %}
+      </div>
     </div>
   </div>
 

@@ -1,11 +1,13 @@
-/* global $, bootstrap, showToast */
+/* global $, bootstrap, showToast, showNavigationLoadingOverlay, hideNavigationLoadingOverlay */
 
 // Global flag so other handlers know an update is in progress
 let KOMETA_UPDATING = false
 let KOMETA_VALIDATED = false
 let KOMETA_VALIDATION_IN_PROGRESS = false
 let KOMETA_UPDATE_AVAILABLE = false
+let KOMETA_UPDATE_CHECK_SKIPPED = false
 let KOMETA_INSTALLED = false
+let KOMETA_CHECK_COMPLETED = false
 // Polling handles (hoist to top so all handlers see them safely)
 let kometaInterval = null
 let kometaStatusInterval = null
@@ -87,6 +89,7 @@ $(document).ready(function () {
   const kometaActionsHeading = document.getElementById('kometa-actions-heading')
   const kometaActionsCollapse = document.getElementById('kometa-actions-collapse')
   const kometaActionsToggle = document.getElementById('kometa-actions-toggle')
+  let headerStyleSubmitting = false
 
   function readMetaFlag (id, datasetKey, attrKey) {
     const el = document.getElementById(id)
@@ -103,14 +106,197 @@ $(document).ready(function () {
     el.setAttribute(`data-${attrKey}`, serialized)
   }
 
+  function setHeaderRollupBadge (id, state, label) {
+    const badge = document.getElementById(id)
+    if (!badge) return
+    badge.textContent = label
+    badge.classList.remove(
+      'qs-validation-rollup-badge--unknown',
+      'qs-validation-rollup-badge--ok',
+      'qs-validation-rollup-badge--warn',
+      'qs-validation-rollup-badge--error'
+    )
+    const normalized = ['unknown', 'ok', 'warn', 'error'].includes(state) ? state : 'unknown'
+    badge.classList.add(`qs-validation-rollup-badge--${normalized}`)
+  }
+
+  function prettifyFlag (value) {
+    const raw = String(value || '').trim()
+    if (!raw) return 'Default'
+    const noPrefix = raw.replace(/^--/, '')
+    return noPrefix.replace(/-/g, ' ')
+  }
+
+  function updateSectionStyleHeaderBadge (value) {
+    const label = formatHeaderStyleLabel(value)
+    setHeaderRollupBadge('header-style-rollup-badge', 'ok', label || 'Active')
+  }
+
+  function updateConfigOutputHeaderBadges () {
+    const yamlText = $yamlOutput.length ? String($yamlOutput.val() || '') : ''
+    const lineCount = computeYamlLineCount(yamlText)
+    setHeaderRollupBadge('config-output-lines-badge', lineCount > 0 ? 'ok' : 'unknown', `${lineCount} lines`)
+    if (!yamlText.trim()) {
+      setHeaderRollupBadge('config-output-rollup-badge', 'unknown', 'No YAML')
+      return
+    }
+    setHeaderRollupBadge('config-output-rollup-badge', showYAML ? 'ok' : 'error', showYAML ? 'Validated' : 'Needs fixes')
+  }
+
+  function updateModeHeaderBadge () {
+    const showCli = $('#show-cli-toggle').is(':checked')
+    setHeaderRollupBadge('heading-mode-rollup-badge', showCli ? 'ok' : 'unknown', showCli ? 'CLI labels' : 'Friendly')
+  }
+
+  function updateRunOptionHeaderBadge () {
+    const mainOption = $('input[name="run-option"]:checked').val() || ''
+    const selectedLibs = $('#library-multiselect').length ? ($('#library-multiselect').val() || []) : []
+    if (mainOption === '--run-libraries') {
+      if (!selectedLibs.length) {
+        setHeaderRollupBadge('heading-runopt-rollup-badge', 'warn', 'Libraries needed')
+      } else {
+        setHeaderRollupBadge('heading-runopt-rollup-badge', 'ok', `${selectedLibs.length} libraries`)
+      }
+      return
+    }
+    if (mainOption === '--times') {
+      const timesInput = $('#times-input').val().trim()
+      if (!timesInput) {
+        setHeaderRollupBadge('heading-runopt-rollup-badge', 'warn', 'Times needed')
+        return
+      }
+      setHeaderRollupBadge('heading-runopt-rollup-badge', isValidTimesFormat(timesInput) ? 'ok' : 'error', isValidTimesFormat(timesInput) ? 'Times set' : 'Invalid times')
+      return
+    }
+    if (mainOption === '--run') {
+      setHeaderRollupBadge('heading-runopt-rollup-badge', 'ok', 'Run now')
+      return
+    }
+    setHeaderRollupBadge('heading-runopt-rollup-badge', 'unknown', 'Scheduled')
+  }
+
+  function updateModeFlagsHeaderBadge () {
+    const modeFlag = $('input[name="mode-flag"]:checked').val() || ''
+    setHeaderRollupBadge('heading-modeflags-rollup-badge', modeFlag ? 'ok' : 'unknown', prettifyFlag(modeFlag))
+  }
+
+  function updateLogFlagsHeaderBadge () {
+    const logFlag = $('input[name="log-flag"]:checked').val() || ''
+    setHeaderRollupBadge('heading-logflags-rollup-badge', logFlag ? 'ok' : 'unknown', prettifyFlag(logFlag))
+  }
+
+  function updateOtherFlagsHeaderBadge () {
+    const coreCount = [
+      'delete-collections', 'delete-labels', 'read-only-config', 'low-priority',
+      'no-report', 'no-missing', 'no-countdown', 'ignore-ghost',
+      'ignore-schedules', 'no-verify-ssl', 'tests'
+    ].filter(opt => $(`#opt-${opt}`).is(':checked')).length
+    const extrasCount = ($('#opt-timeout').is(':checked') ? 1 : 0) +
+      ($('#opt-divider').is(':checked') ? 1 : 0) +
+      ($('#opt-width').is(':checked') ? 1 : 0)
+    const total = coreCount + extrasCount
+    if (!total) {
+      setHeaderRollupBadge('heading-otherflags-rollup-badge', 'unknown', 'Default')
+      return
+    }
+    setHeaderRollupBadge('heading-otherflags-rollup-badge', 'ok', `${total} enabled`)
+  }
+
+  function updateRunCommandHeaderBadge () {
+    if (!showYAML) {
+      setHeaderRollupBadge('run-command-rollup-badge', 'error', 'Fix validation')
+      return
+    }
+    if (KOMETA_VALIDATION_IN_PROGRESS) {
+      setHeaderRollupBadge('run-command-rollup-badge', 'unknown', 'Checking Kometa')
+      return
+    }
+    if (KOMETA_UPDATING) {
+      setHeaderRollupBadge('run-command-rollup-badge', 'unknown', 'Updating Kometa')
+      return
+    }
+    if (!KOMETA_VALIDATED) {
+      setHeaderRollupBadge('run-command-rollup-badge', 'warn', 'Validate Kometa')
+      return
+    }
+    if (KOMETA_STATUS === 'running') {
+      setHeaderRollupBadge('run-command-rollup-badge', 'warn', 'Run in progress')
+      return
+    }
+    setHeaderRollupBadge('run-command-rollup-badge', isRunCommandValid() ? 'ok' : 'warn', isRunCommandValid() ? 'Ready' : 'Incomplete')
+  }
+
+  function updateLogscanHeaderBadge (data) {
+    const source = data || lastLogscanPayload
+    if (!source) {
+      setHeaderRollupBadge('logscan-rollup-badge', 'unknown', 'Pending')
+      return
+    }
+    if (source.error) {
+      setHeaderRollupBadge('logscan-rollup-badge', 'error', 'Unavailable')
+      return
+    }
+    const recCount = Array.isArray(source.recommendations) ? source.recommendations.length : 0
+    const missingCount = Array.isArray(source.missing_people) ? source.missing_people.length : 0
+    const issueCount = recCount + missingCount
+    if (!issueCount) {
+      setHeaderRollupBadge('logscan-rollup-badge', 'ok', 'No issues')
+      return
+    }
+    setHeaderRollupBadge('logscan-rollup-badge', 'warn', `${issueCount} items`)
+  }
+
+  function syncFinalAccordionRollups () {
+    updateModeHeaderBadge()
+    updateRunOptionHeaderBadge()
+    updateModeFlagsHeaderBadge()
+    updateLogFlagsHeaderBadge()
+    updateOtherFlagsHeaderBadge()
+    updateConfigOutputHeaderBadges()
+    updateRunCommandHeaderBadge()
+    updateLogscanHeaderBadge()
+  }
+
+  function getFinalGateState () {
+    const el = document.getElementById('final-gate-state')
+    if (!el) {
+      return {
+        stage: 'config',
+        autoValidate: false,
+        configValid: false
+      }
+    }
+    return {
+      stage: String(el.dataset.stage || 'config'),
+      todoCount: Number(el.dataset.todoCount || 0),
+      autoValidate: el.dataset.autoValidate === 'true',
+      configValid: el.dataset.configValid === 'true',
+      bulkFresh: el.dataset.bulkFresh === 'true'
+    }
+  }
+
   function updateValidationGate () {
+    const finalGate = getFinalGateState()
+    if (finalGate.stage === 'todo' || finalGate.stage === 'freshness') {
+      showYAML = false
+      $('#validation-messages').hide()
+      $('#no-validation-warning, #yaml-warnings, #yaml-warning-msg, #validation-error').addClass('d-none')
+      $('#download-btn, #download-redacted-btn').addClass('d-none')
+      $('#run-controls-container').addClass('d-none')
+      $('#run-now').prop('disabled', true)
+      $('#run-now-label').text('Run Now')
+      updateRunNowState()
+      syncFinalAccordionRollups()
+      return
+    }
+
     const plexValid = readMetaFlag('plex_valid', 'plexValid', 'plex-valid')
     const tmdbValid = readMetaFlag('tmdb_valid', 'tmdbValid', 'tmdb-valid')
     const libsValid = readMetaFlag('libs_valid', 'libsValid', 'libs-valid')
     const settValid = readMetaFlag('sett_valid', 'settValid', 'sett-valid')
     const yamlValid = readMetaFlag('yaml_valid', 'yamlValid', 'yaml-valid')
 
-    showYAML = plexValid && tmdbValid && libsValid && settValid && yamlValid
+    showYAML = finalGate.configValid || (plexValid && tmdbValid && libsValid && settValid && yamlValid)
 
     const validationMessages = []
     const rowFor = (label, href) => {
@@ -133,7 +319,11 @@ $(document).ready(function () {
     $('#run-now-label').text('Run Now')
 
     if (!showYAML) {
-      $('#validation-messages').html(validationMessages.join('<br>')).show()
+      if (validationMessages.length) {
+        $('#validation-messages').html(validationMessages.join('<br>')).show()
+      } else {
+        $('#validation-messages').hide()
+      }
       $('#no-validation-warning, #yaml-warnings, #yaml-warning-msg, #validation-error').removeClass('d-none')
       $('#download-btn, #download-redacted-btn').addClass('d-none')
       $('#run-controls-container').addClass('d-none') // Hide run section
@@ -147,6 +337,7 @@ $(document).ready(function () {
     }
 
     updateRunNowState()
+    syncFinalAccordionRollups()
   }
 
   updateValidationGate()
@@ -171,6 +362,7 @@ $(document).ready(function () {
     if (!$yamlLineCount.length || !$yamlOutput.length) return
     const lineCount = computeYamlLineCount($yamlOutput.val())
     $yamlLineCount.text(`Line count (includes comments and blank lines): ${lineCount}`)
+    updateConfigOutputHeaderBadges()
   }
 
   updateYamlLineCount()
@@ -189,6 +381,7 @@ $(document).ready(function () {
   function updateHeaderStyleLabel (value) {
     if (!headerStyleLabel) return
     headerStyleLabel.textContent = formatHeaderStyleLabel(value)
+    updateSectionStyleHeaderBadge(value)
   }
 
   function setActiveGridCard (fontName) {
@@ -448,6 +641,7 @@ $(document).ready(function () {
     updateLabels(otherFlags, 'opt-')
 
     $('[data-bs-toggle="tooltip"]').tooltip({ html: true })
+    syncFinalAccordionRollups()
   }
 
   updateFlagLabels(false) // Default to friendly labels
@@ -463,19 +657,25 @@ $(document).ready(function () {
 
   function updateRunNowState () {
     const $runNow = $('#run-now')
-    if (!$runNow.length) return
+    if (!$runNow.length) {
+      updateRunCommandHeaderBadge()
+      return
+    }
 
     if (!showYAML || KOMETA_VALIDATION_IN_PROGRESS || KOMETA_UPDATING || KOMETA_STATUS === 'running' || !KOMETA_VALIDATED) {
       $runNow.prop('disabled', true)
+      updateRunCommandHeaderBadge()
       return
     }
 
     if (!isRunCommandValid()) {
       $runNow.prop('disabled', true)
+      updateRunCommandHeaderBadge()
       return
     }
 
     $runNow.prop('disabled', false)
+    updateRunCommandHeaderBadge()
   }
 
   function buildCommand () {
@@ -510,6 +710,7 @@ $(document).ready(function () {
         $('#times-error').removeClass('d-none')
         runCmdOutput.text('⚠️ Invalid time format. Use pipe-separated 24h times like 06:00|15:00.')
         updateRunNowState()
+        syncFinalAccordionRollups()
         return false
       } else {
         $('#times-error').addClass('d-none')
@@ -524,6 +725,7 @@ $(document).ready(function () {
       if (!selectedLibs.length) {
         runCmdOutput.text('⚠️ Please select at least one library when using --run-libraries.')
         updateRunNowState()
+        syncFinalAccordionRollups()
         return false
       }
       cli += ` "${selectedLibs.join('|')}"`
@@ -556,6 +758,7 @@ $(document).ready(function () {
         $('#timeout-error').removeClass('d-none')
         runCmdOutput.text('⚠️ Invalid timeout. Please enter a positive whole number.')
         updateRunNowState()
+        syncFinalAccordionRollups()
         return false
       } else {
         $('#timeout-error').addClass('d-none')
@@ -571,6 +774,7 @@ $(document).ready(function () {
         $('#width-error').removeClass('d-none')
         runCmdOutput.text('⚠️ Width must be a number between 90 and 300.')
         updateRunNowState()
+        syncFinalAccordionRollups()
         return false
       } else {
         $('#width-error').addClass('d-none')
@@ -584,6 +788,7 @@ $(document).ready(function () {
         $('#divider-error').removeClass('d-none')
         runCmdOutput.text('⚠️ Divider must be a single character.')
         updateRunNowState()
+        syncFinalAccordionRollups()
         return false
       } else {
         $('#divider-error').addClass('d-none')
@@ -593,6 +798,7 @@ $(document).ready(function () {
 
     runCmdOutput.text(cli)
     updateRunNowState()
+    syncFinalAccordionRollups()
     return true
   }
 
@@ -623,6 +829,10 @@ $(document).ready(function () {
   function validateKometaRoot () {
     if (KOMETA_VALIDATION_IN_PROGRESS) return
     KOMETA_VALIDATION_IN_PROGRESS = true
+    if (typeof showNavigationLoadingOverlay === 'function') {
+      showNavigationLoadingOverlay('kometa-check')
+    }
+    syncKometaRollupBadge()
     const $logBox = $('#kometa-validation-log')
     const $spinner = $('#spinner_validate')
     const $runNow = $('#run-now')
@@ -646,6 +856,7 @@ $(document).ready(function () {
       // ✅ send the *normalized* path to the backend
       data: JSON.stringify({ path: defaultRootPosix, config_name: configName }),
       success: (res) => {
+        KOMETA_CHECK_COMPLETED = true
         if (Array.isArray(res.log)) res.log.forEach(line => $logBox.append(`${line}\n`))
 
         if (res.success) {
@@ -653,7 +864,13 @@ $(document).ready(function () {
           $logBox.append('✅ Kometa root validated successfully.\n')
           if (res.kometa_version) $logBox.append(`📦 Local Kometa version: ${res.kometa_version}\n`)
 
-          if (res.remote_version && res.local_version) {
+          if (res.kometa_update_check_skipped) {
+            KOMETA_UPDATE_CHECK_SKIPPED = true
+            KOMETA_UPDATE_AVAILABLE = false
+            $('#kometa-update-box').addClass('d-none')
+            syncUpdateButtonLabel()
+          } else if (res.remote_version && res.local_version) {
+            KOMETA_UPDATE_CHECK_SKIPPED = false
             const hadUpdate = KOMETA_UPDATE_AVAILABLE
             if (res.kometa_update_available) {
               KOMETA_UPDATE_AVAILABLE = true
@@ -691,12 +908,14 @@ $(document).ready(function () {
           $('#kometa-install-path').text(kometaRootDisplay)
 
           // Rebuild command and reveal run section only when all validations pass
-          const allValid =
+          const finalGate = getFinalGateState()
+          const allValid = showYAML && (finalGate.configValid || (
             $('#plex_valid').data('plex-valid') === 'True' &&
             $('#tmdb_valid').data('tmdb-valid') === 'True' &&
             $('#libs_valid').data('libs-valid') === 'True' &&
             $('#sett_valid').data('sett-valid') === 'True' &&
             $('#yaml_valid').data('yaml-valid') === 'True'
+          ))
 
           $('#run-command-output').text('')
           try { buildCommand() } catch (_) { }
@@ -717,8 +936,10 @@ $(document).ready(function () {
         }
 
         if ($spinner.length) $spinner.hide()
+        syncKometaRollupBadge()
       },
       error: (xhr) => {
+        KOMETA_CHECK_COMPLETED = true
         const msg = xhr?.responseJSON?.error || 'The Kometa root path is invalid or inaccessible. Please try again.'
         $logBox.append(`❌ ${msg}\n`)
         const lowered = String(msg || '').toLowerCase()
@@ -729,11 +950,16 @@ $(document).ready(function () {
         hideRunCommandSectionUntilValidated()
         $runNow.prop('disabled', true)
         if ($spinner.length) $spinner.hide()
+        syncKometaRollupBadge()
       },
       complete: () => {
         KOMETA_VALIDATION_IN_PROGRESS = false
         updateRunNowState()
         syncUpdateButtonLabel()
+        syncKometaRollupBadge()
+        if (typeof hideNavigationLoadingOverlay === 'function') {
+          hideNavigationLoadingOverlay()
+        }
       }
     })
   }
@@ -779,16 +1005,55 @@ $(document).ready(function () {
   }
 
   function syncKometaUpdateAttention () {
-    if (!kometaActionsHeading || !kometaActionsToggle) return
-    const isCollapsed = kometaActionsToggle.classList.contains('collapsed')
-    const needsAttention = KOMETA_UPDATE_AVAILABLE && isCollapsed
-    kometaActionsHeading.classList.toggle('kometa-update-attention', needsAttention)
-    kometaActionsToggle.classList.toggle('kometa-update-attention', needsAttention)
+    if (kometaActionsHeading && kometaActionsToggle) {
+      const isCollapsed = kometaActionsToggle.classList.contains('collapsed')
+      const needsAttention = KOMETA_UPDATE_AVAILABLE && isCollapsed
+      kometaActionsHeading.classList.toggle('kometa-update-attention', needsAttention)
+      kometaActionsToggle.classList.toggle('kometa-update-attention', needsAttention)
+    }
+    syncKometaRollupBadge()
+  }
+
+  function getKometaRollupStatus () {
+    if (KOMETA_UPDATING) return { state: 'unknown', label: 'Updating...' }
+    if (KOMETA_VALIDATION_IN_PROGRESS) return { state: 'unknown', label: 'Checking...' }
+    if (!KOMETA_CHECK_COMPLETED) return { state: 'unknown', label: 'Not checked' }
+    if (!KOMETA_INSTALLED) return { state: 'error', label: 'Install needed' }
+    if (KOMETA_UPDATE_CHECK_SKIPPED) return { state: 'unknown', label: 'Skipped while running' }
+    if (KOMETA_UPDATE_AVAILABLE) return { state: 'warn', label: 'Update available' }
+    return { state: 'ok', label: 'Up to date' }
+  }
+
+  function syncKometaRollupBadge () {
+    const badge = document.getElementById('kometa-update-rollup-badge')
+    if (!badge) return
+    const { state, label } = getKometaRollupStatus()
+    badge.textContent = label
+    badge.classList.remove(
+      'qs-validation-rollup-badge--unknown',
+      'qs-validation-rollup-badge--ok',
+      'qs-validation-rollup-badge--warn',
+      'qs-validation-rollup-badge--error'
+    )
+    badge.classList.add(`qs-validation-rollup-badge--${state}`)
   }
 
   if (kometaActionsCollapse) {
     kometaActionsCollapse.addEventListener('shown.bs.collapse', syncKometaUpdateAttention)
     kometaActionsCollapse.addEventListener('hidden.bs.collapse', syncKometaUpdateAttention)
+  }
+
+  function setKometaPrepareRunningState (isRunning) {
+    const accordion = document.getElementById('kometa-actions-accordion')
+    if (accordion) accordion.classList.toggle('opacity-50', Boolean(isRunning))
+    if (!kometaActionsCollapse || !kometaActionsToggle) return
+    if (isRunning && kometaActionsCollapse.classList.contains('show') && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+      bootstrap.Collapse.getOrCreateInstance(kometaActionsCollapse, { toggle: false }).hide()
+    }
+    if (isRunning) {
+      kometaActionsToggle.classList.add('collapsed')
+      kometaActionsToggle.setAttribute('aria-expanded', 'false')
+    }
   }
 
   function showCopyButtonSuccess (iconSelector, textSelector) {
@@ -823,20 +1088,27 @@ $(document).ready(function () {
     const accordion = $('#run-command-output-accordion')
     const box = $('#run-command-box')
     accordion.addClass('d-none')
+    $('#run-command-output-collapse').removeClass('show')
+    $('#run-command-output-heading .accordion-button').addClass('collapsed').attr('aria-expanded', 'false')
     box.removeClass('fade-in').addClass('d-none') // Hide instantly
     $('#run-now').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i> Waiting...')
   }
 
-  function showRunCommandSectionAfterValidated () {
+  function revealRunCommandSection () {
     const accordion = $('#run-command-output-accordion')
     const box = $('#run-command-box')
 
     accordion.removeClass('d-none')
+    $('#run-command-output-collapse').addClass('show')
+    $('#run-command-output-heading .accordion-button').removeClass('collapsed').attr('aria-expanded', 'true')
     box.removeClass('d-none') // Reveal element (opacity still 0)
     setTimeout(() => {
       box.addClass('fade-in') // Let browser register change, then fade in
     }, 10)
+  }
 
+  function showRunCommandSectionAfterValidated () {
+    revealRunCommandSection()
     $('#run-now').html('<i class="bi bi-play-fill me-1"></i> Run Now')
     try { buildCommand() } catch (_) {}
     updateRunNowState()
@@ -1156,6 +1428,8 @@ $(document).ready(function () {
 
     KOMETA_UPDATING = true
     KOMETA_VALIDATED = false
+    KOMETA_UPDATE_CHECK_SKIPPED = false
+    syncKometaRollupBadge()
     hideRunCommandSectionUntilValidated()
     const prevRunNowHtml = $runNow.html()
     const prevRunNowDisabled = $runNow.prop('disabled')
@@ -1248,6 +1522,7 @@ $(document).ready(function () {
       })
       .finally(() => {
         cleanupUI()
+        syncKometaRollupBadge()
       })
   }
 
@@ -1257,6 +1532,7 @@ $(document).ready(function () {
     if (!KOMETA_UPDATING) syncUpdateButtonLabel()
   })
   syncUpdateButtonLabel()
+  syncKometaRollupBadge()
 
   // Sync visibility for timeout and divider on page load
   $('#opt-timeout-container').toggleClass('d-none', !$('#opt-timeout').is(':checked'))
@@ -1633,6 +1909,7 @@ $(document).ready(function () {
       $logscanSummary.text('')
       $logscanRecommendations.html('<div class="text-muted">Logscan unavailable.</div>')
       $logscanMissing.addClass('d-none').empty()
+      updateLogscanHeaderBadge({ error: true })
       return
     }
 
@@ -1724,6 +2001,8 @@ $(document).ready(function () {
     } else {
       $logscanMissing.addClass('d-none')
     }
+
+    updateLogscanHeaderBadge(data)
   }
 
   function fetchLogscanAnalysis (force = false) {
@@ -1741,6 +2020,7 @@ $(document).ready(function () {
       .catch(err => {
         console.error('Error fetching logscan analysis:', err)
         $logscanRecommendations.html('<div class="text-muted">Logscan unavailable.</div>')
+        updateLogscanHeaderBadge({ error: true })
       })
   }
 
@@ -1815,14 +2095,27 @@ $(document).ready(function () {
   checkKometaStatus()
 
   // First-run: validate Kometa root once the log box is present.
-  if (document.getElementById('kometa-validation-log')) {
+  if (document.getElementById('kometa-validation-log') && getFinalGateState().stage !== 'todo' && getFinalGateState().stage !== 'freshness') {
     validateKometaRoot()
   }
 
   if (document.getElementById('header-style')) {
     document.getElementById('header-style').addEventListener('change', function () {
-      showToast('info', 'Updating header style. Please wait for the page to reload...')
-      if (headerStyleWait) headerStyleWait.classList.remove('d-none')
+      if (headerStyleSubmitting) return
+      headerStyleSubmitting = true
+      showToast('info', 'Regenerating section style. Please wait for the page to reload...')
+      if (typeof showNavigationLoadingOverlay === 'function') {
+        showNavigationLoadingOverlay('header-style')
+      }
+      if (headerStyleWait) {
+        headerStyleWait.textContent = 'Regenerating section style and YAML...'
+        headerStyleWait.classList.remove('d-none')
+      }
+      if (headerGrid) {
+        headerGrid.querySelectorAll('.header-style-card').forEach(card => {
+          card.disabled = true
+        })
+      }
       if (finalContentWrapper) finalContentWrapper.classList.add('is-updating')
       setTimeout(() => {
         document.getElementById('configForm').submit()
@@ -1889,6 +2182,7 @@ $(document).ready(function () {
     missing_plex_validation: 'Plex not validated',
     no_libraries: 'No libraries selected',
     invalid_paths: 'Invalid paths',
+    missing_library_defaults: 'Missing library defaults',
     missing_placeholder_imdb: 'Missing placeholder IMDb ID',
     invalid_fields: 'Invalid fields',
     no_webhooks: 'No webhooks configured',
@@ -1963,15 +2257,18 @@ $(document).ready(function () {
   }
 
   const validateAllBtn = document.getElementById('validate-all-services')
-  const validateAllSpinner = document.getElementById('validate-all-spinner')
   const validateAllStatus = document.getElementById('validate-all-status')
   const validateAllStatusTime = document.getElementById('validate-all-status-time')
+  const validateAllStatusBulk = document.getElementById('validate-all-status-bulk')
+  const validateAllStatusBulkTime = document.getElementById('validate-all-status-bulk-time')
   const validationStatusLastRun = document.getElementById('validation-status-last-run')
+  let previouslyBlocked = false
+  let previousStatuses = {}
+
   if (validateAllBtn) {
-    validateAllBtn.addEventListener('click', function () {
-      if (validateAllBtn.disabled) return
-      const previouslyBlocked = !showYAML
-      const previousStatuses = {}
+    document.addEventListener('qs:bulk-validation-start', function () {
+      previouslyBlocked = !showYAML
+      previousStatuses = {}
       document.querySelectorAll('[data-validation-key]').forEach(row => {
         const key = row.dataset.validationKey
         const pill = row.querySelector('.validation-status-pill')
@@ -1979,105 +2276,130 @@ $(document).ready(function () {
           previousStatuses[key] = pill.classList.contains('rating-mapping-option-via--validated')
         }
       })
-      validateAllBtn.disabled = true
-      if (validateAllSpinner) validateAllSpinner.classList.remove('d-none')
+
       if (validateAllStatus) {
-        validateAllStatus.classList.add('d-none', 'text-danger')
-        validateAllStatus.classList.remove('text-success')
+        validateAllStatus.classList.add('d-none')
+        validateAllStatus.classList.remove('text-danger', 'text-success', 'text-warning')
         validateAllStatus.textContent = 'Validating configured services...'
         validateAllStatus.classList.remove('d-none')
       }
-
-      fetch('/validate_all_services', { method: 'POST' })
-        .then(async (res) => {
-          let data = null
-          try {
-            data = await res.json()
-          } catch (err) {
-            data = null
-          }
-
-          if (!res.ok) {
-            const message = (data && (data.message || data.error)) || `Request failed (${res.status}).`
-            throw new Error(message)
-          }
-
-          if (!data || !data.success) {
-            throw new Error((data && (data.message || data.error)) || 'Validation failed. Please try again.')
-          }
-
-          const results = data.results || {}
-          const gateTargets = {
-            '010-plex': { id: 'plex_valid', datasetKey: 'plexValid', attrKey: 'plex-valid' },
-            '020-tmdb': { id: 'tmdb_valid', datasetKey: 'tmdbValid', attrKey: 'tmdb-valid' },
-            '025-libraries': { id: 'libs_valid', datasetKey: 'libsValid', attrKey: 'libs-valid' },
-            '150-settings': { id: 'sett_valid', datasetKey: 'settValid', attrKey: 'sett-valid' }
-          }
-          Object.keys(results).forEach(key => updateValidationRow(key, results[key]))
-          Object.keys(results).forEach(key => {
-            const target = gateTargets[key]
-            const result = results[key]
-            if (!target || !result) return
-            if (result.status === 'validated') {
-              setMetaFlag(target.id, target.datasetKey, target.attrKey, true)
-            } else if (result.status === 'failed' || result.status === 'skipped') {
-              setMetaFlag(target.id, target.datasetKey, target.attrKey, false)
-            }
-          })
-          const summary = data.summary || {}
-          const ok = summary.validated || 0
-          const failed = summary.failed || 0
-          const skipped = summary.skipped || 0
-          showToast('info', `Validate all complete. Validated: ${ok} • Failed: ${failed} • Skipped: ${skipped}`)
-          if (validateAllStatus) {
-            // Per-row Validation Results show details; no per-summary label mapping needed.
-            // Note: summary details are shown per-row in the Validation Results column.
-            validateAllStatus.classList.remove('d-none', 'text-danger')
-            validateAllStatus.classList.add('text-success')
-            const summaryText = data.summary_text || `Completed. Validated: ${ok} • Failed: ${failed} • Skipped: ${skipped}.`
-            validateAllStatus.textContent = summaryText
-            const summaryUpdatedAt = data.summary_updated_at || new Date().toISOString()
-            if (validateAllStatusTime) {
-              validateAllStatusTime.dataset.validationIso = summaryUpdatedAt
-              const parsed = new Date(summaryUpdatedAt)
-              if (!Number.isNaN(parsed.getTime())) {
-                validateAllStatusTime.textContent = formatLocalTimestamp(parsed)
-              }
-            }
-            if (validationStatusLastRun) {
-              validationStatusLastRun.dataset.validationIso = summaryUpdatedAt
-              const parsed = new Date(summaryUpdatedAt)
-              if (!Number.isNaN(parsed.getTime())) {
-                validationStatusLastRun.textContent = formatLocalTimestamp(parsed)
-              }
-            }
-          }
-          updateValidationGate()
-          const anyNewlyValidated = Object.keys(results).some(key => results[key]?.status === 'validated' && !previousStatuses[key])
-          if (previouslyBlocked && showYAML) {
-            showToast('info', 'Validation complete. Refreshing YAML output...')
-            setTimeout(() => window.location.reload(), 300)
-            return
-          }
-          if (anyNewlyValidated) {
-            showToast('info', 'Validation updated. Refreshing YAML output...')
-            setTimeout(() => window.location.reload(), 300)
-          }
-        })
-        .catch((err) => {
-          const message = err && err.message ? err.message : 'Validate all failed. Please try again.'
-          showToast('error', message)
-          if (validateAllStatus) {
-            validateAllStatus.classList.remove('d-none', 'text-success')
-            validateAllStatus.classList.add('text-danger')
-            validateAllStatus.textContent = message
-          }
-        })
-        .finally(() => {
-          validateAllBtn.disabled = false
-          if (validateAllSpinner) validateAllSpinner.classList.add('d-none')
-        })
     })
+
+    document.addEventListener('qs:bulk-validation-complete', function (event) {
+      const data = (event && event.detail) ? event.detail : {}
+      const results = data.results || {}
+      const gateTargets = {
+        '010-plex': { id: 'plex_valid', datasetKey: 'plexValid', attrKey: 'plex-valid' },
+        '020-tmdb': { id: 'tmdb_valid', datasetKey: 'tmdbValid', attrKey: 'tmdb-valid' },
+        '025-libraries': { id: 'libs_valid', datasetKey: 'libsValid', attrKey: 'libs-valid' },
+        '150-settings': { id: 'sett_valid', datasetKey: 'settValid', attrKey: 'sett-valid' }
+      }
+
+      Object.keys(results).forEach(key => updateValidationRow(key, results[key]))
+      Object.keys(results).forEach(key => {
+        const target = gateTargets[key]
+        const result = results[key]
+        if (!target || !result) return
+        if (result.status === 'validated') {
+          setMetaFlag(target.id, target.datasetKey, target.attrKey, true)
+        } else if (result.status === 'failed' || result.status === 'skipped') {
+          setMetaFlag(target.id, target.datasetKey, target.attrKey, false)
+        }
+      })
+
+      const summary = data.summary || {}
+      const ok = summary.validated || 0
+      const failed = summary.failed || 0
+      const skipped = summary.skipped || 0
+      const summaryUpdatedAt = data.summary_updated_at || new Date().toISOString()
+      if (validateAllStatus) {
+        validateAllStatus.classList.remove('d-none', 'text-danger', 'text-success', 'text-warning')
+        if (failed > 0) {
+          validateAllStatus.classList.add('text-danger')
+        } else if (skipped > 0) {
+          validateAllStatus.classList.add('text-warning')
+        } else {
+          validateAllStatus.classList.add('text-success')
+        }
+        const currentSummaryText = `Current. Validated: ${ok} • Failed: ${failed} • Pending: ${skipped}.`
+        validateAllStatus.textContent = currentSummaryText
+        if (validateAllStatusTime) {
+          validateAllStatusTime.dataset.validationIso = summaryUpdatedAt
+          const parsed = new Date(summaryUpdatedAt)
+          if (!Number.isNaN(parsed.getTime())) {
+            validateAllStatusTime.textContent = formatLocalTimestamp(parsed)
+          }
+        }
+        if (validationStatusLastRun) {
+          validationStatusLastRun.dataset.validationIso = summaryUpdatedAt
+          const parsed = new Date(summaryUpdatedAt)
+          if (!Number.isNaN(parsed.getTime())) {
+            validationStatusLastRun.textContent = formatLocalTimestamp(parsed)
+          }
+        }
+      }
+      if (validateAllStatusBulk) {
+        validateAllStatusBulk.classList.remove('d-none')
+        validateAllStatusBulk.textContent = data.summary_text || `Completed. Validated: ${ok} • Failed: ${failed} • Skipped: ${skipped}.`
+      }
+      if (validateAllStatusBulkTime) {
+        validateAllStatusBulkTime.dataset.validationIso = summaryUpdatedAt
+        const parsed = new Date(summaryUpdatedAt)
+        if (!Number.isNaN(parsed.getTime())) {
+          validateAllStatusBulkTime.textContent = formatLocalTimestamp(parsed)
+        }
+      }
+
+      updateValidationGate()
+      const anyNewlyValidated = Object.keys(results).some(key => results[key]?.status === 'validated' && !previousStatuses[key])
+      if (previouslyBlocked && showYAML) {
+        showToast('info', 'Validation complete. Refreshing YAML output...')
+        setTimeout(() => window.location.reload(), 300)
+        return
+      }
+      if (anyNewlyValidated) {
+        showToast('info', 'Validation updated. Refreshing YAML output...')
+        setTimeout(() => window.location.reload(), 300)
+      }
+    })
+
+    document.addEventListener('qs:bulk-validation-error', function (event) {
+      const detail = (event && event.detail) ? event.detail : {}
+      const message = detail.message || 'Validate all failed. Please try again.'
+      if (validateAllStatus) {
+        validateAllStatus.classList.remove('d-none', 'text-success', 'text-warning')
+        validateAllStatus.classList.add('text-danger')
+        validateAllStatus.textContent = message
+      }
+    })
+
+    if (window.QSBulkValidation && typeof window.QSBulkValidation.getSummaryState === 'function') {
+      const badge = document.getElementById('validation-status-rollup-badge')
+      if (badge) {
+        const initialSummary = {
+          validated: Number(badge.dataset.validated || 0),
+          failed: Number(badge.dataset.failed || 0),
+          skipped: Number(badge.dataset.skipped || 0)
+        }
+        const state = window.QSBulkValidation.getSummaryState(initialSummary)
+        badge.classList.remove(
+          'qs-validation-rollup-badge--unknown',
+          'qs-validation-rollup-badge--ok',
+          'qs-validation-rollup-badge--warn',
+          'qs-validation-rollup-badge--error'
+        )
+        badge.classList.add(`qs-validation-rollup-badge--${state}`)
+      }
+    }
+
+    if (getFinalGateState().autoValidate && window.QSBulkValidation && typeof window.QSBulkValidation.run === 'function') {
+      window.QSBulkValidation.run({ source: 'final-freshness', silentToast: true })
+        .then(() => {
+          showToast('info', 'Validate All complete. Refreshing final validation...')
+          setTimeout(() => window.location.reload(), 300)
+        })
+        .catch(() => {})
+    }
   }
 
   $('#run-now').on('click', function () {
@@ -2261,6 +2583,7 @@ $(document).ready(function () {
         const $forceUpdate = $forceUpdateToggle
         const $runNow = $('#run-now')
         const $stopNow = $('#stop-now')
+        setKometaPrepareRunningState(data.status === 'running')
 
         // Disable update if Kometa is running or an update is in progress
         const shouldDisableUpdate = (data.status === 'running') || KOMETA_UPDATING
@@ -2307,7 +2630,9 @@ $(document).ready(function () {
         // Handle Kometa process states
         if (data.status === 'running') {
           finalLogscanAnalyzeTriggered = false
+          $('#incomplete-run-alert').addClass('d-none')
           // Kometa is actively running → keep Run disabled, allow Stop
+          revealRunCommandSection()
           $runNow.prop('disabled', true).html('<i class="bi bi-play-fill me-1"></i> Run Now')
           $stopNow.removeClass('d-none').prop('disabled', false)
           $('#run-output').removeClass('d-none')

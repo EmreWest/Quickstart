@@ -2,6 +2,15 @@
 
 $(document).ready(function () {
   const $tableBody = $('#logscan-trends-table tbody')
+  const $tableSummary = $('#logscan-table-summary')
+  const $tableSortKey = $('#logscan-table-sort-key')
+  const $tableSortDir = $('#logscan-table-sort-dir')
+  const $tablePageSize = $('#logscan-table-page-size')
+  const $tablePageInfo = $('#logscan-table-page-info')
+  const $tablePrev = $('#logscan-table-prev')
+  const $tableNext = $('#logscan-table-next')
+  const $tableToggle = $('#logscan-table-toggle')
+  const tableCollapseEl = document.getElementById('logscan-recent-runs-collapse')
   const $summary = $('#logscan-trends-summary')
   const $daily = $('#logscan-trends-daily')
   const $dailyRuntime = $('#logscan-trends-daily-runtime')
@@ -46,7 +55,9 @@ $(document).ready(function () {
   let allRuns = []
   const sectionDetailsByRunKey = new Map()
   let currentFilteredRuns = []
+  let currentTableRuns = []
   let allRunsTotal = 0
+  let tablePage = 1
   const sortState = { key: 'finished_at', dir: 'desc' }
   let lastIngestState = null
   let analyticsPrefs = null
@@ -251,8 +262,52 @@ $(document).ready(function () {
     }, 0)
   }
 
+  function getRunTimeParts (run) {
+    const raw = run && typeof run.run_time_seconds === 'number' && Number.isFinite(run.run_time_seconds)
+      ? run.run_time_seconds
+      : 0
+    const sectionTotal = getSectionTotal(run && run.section_runtimes)
+    const effective = Math.max(raw, sectionTotal)
+    return { raw, sectionTotal, effective }
+  }
+
+  function getEffectiveRunTimeSeconds (run) {
+    return getRunTimeParts(run).effective
+  }
+
+  function getRuntimeHelpText (run) {
+    const parts = getRunTimeParts(run)
+    if (parts.raw > 0 && parts.sectionTotal > parts.raw + 60) {
+      return `Displayed from section runtimes (${formatSeconds(parts.sectionTotal)}) because the parsed run total was ${formatSeconds(parts.raw)}. Reingest logs after this update to refresh stored run totals.`
+    }
+    return 'Total run time parsed from the Kometa run summary.'
+  }
+
   function getCountsTotal (run) {
     return getCount(run, 'warning_count') + getCount(run, 'error_count') + getCount(run, 'trace_count')
+  }
+
+  function renderInfoDot (helpText) {
+    return `<span class="logscan-info-dot" tabindex="0" title="${escapeHtml(helpText)}" data-help="${escapeHtml(helpText)}" aria-label="${escapeHtml(helpText)}">i</span>`
+  }
+
+  function renderRunCardCell (label, helpText, valueHtml, attrs = '') {
+    return `
+      <td data-label="${escapeHtml(label)}" ${attrs}>
+        <span class="logscan-card-label">${escapeHtml(label)} ${renderInfoDot(helpText)}</span>
+        <span class="logscan-card-value">${valueHtml}</span>
+      </td>
+    `
+  }
+
+  function renderCountChip (shortName, label, value, variant) {
+    const displayValue = Number.isFinite(value) ? value : 0
+    const title = `${shortName} = ${label}: ${displayValue}`
+    return `
+      <span class="logscan-count-chip logscan-count-chip--${variant}" title="${escapeHtml(title)}">
+        <span>${escapeHtml(shortName)}</span><strong>${escapeHtml(String(displayValue))}</strong>
+      </span>
+    `
   }
 
   function normalizeConfigName (value) {
@@ -835,7 +890,7 @@ $(document).ready(function () {
       }
     })
     const runtimeValues = runs
-      .map(run => run.run_time_seconds)
+      .map(run => getEffectiveRunTimeSeconds(run))
       .filter(val => typeof val === 'number' && Number.isFinite(val) && val > 0)
     const avgRuntime = runtimeValues.length
       ? runtimeValues.reduce((sum, val) => sum + val, 0) / runtimeValues.length
@@ -1015,7 +1070,7 @@ $(document).ready(function () {
     runs.forEach(run => {
       const key = getRunDateKey(run)
       if (!key) return
-      const runtime = run.run_time_seconds
+      const runtime = getEffectiveRunTimeSeconds(run)
       if (typeof runtime !== 'number' || !Number.isFinite(runtime) || runtime <= 0) return
       if (!buckets[key]) {
         buckets[key] = { total: 0, count: 0 }
@@ -1050,13 +1105,52 @@ $(document).ready(function () {
     $dailyRuntime.html(rows.join(''))
   }
 
+  function getTablePageSize () {
+    const parsed = parseInt($tablePageSize.val() || '10', 10)
+    if ([10, 25, 100].includes(parsed)) return parsed
+    return 10
+  }
+
+  function updateTableSummary (total, pageSize, pageCount) {
+    if ($tableSummary.length) {
+      if (!total) {
+        $tableSummary.text('No runs match the current filters.')
+      } else {
+        const matchingText = `${total} matching loaded run${total === 1 ? '' : 's'}`
+        const loadedText = allRunsTotal > allRuns.length
+          ? `${allRuns.length} loaded / ${allRunsTotal} total stored`
+          : `${allRuns.length} loaded`
+        $tableSummary.text(`${matchingText}. ${loadedText}. Page size: ${pageSize}.`)
+      }
+    }
+    if (!$tablePageInfo.length) return
+    if (!total) {
+      $tablePageInfo.text('No rows')
+      return
+    }
+    const start = ((tablePage - 1) * pageSize) + 1
+    const end = Math.min(total, tablePage * pageSize)
+    $tablePageInfo.text(`Showing ${start}-${end} of ${total} loaded run${total === 1 ? '' : 's'} (page ${tablePage}/${pageCount})`)
+  }
+
   function renderTable (runs) {
-    if (!runs.length) {
-      $tableBody.html('<tr><td colspan="10" class="text-muted">No runs stored yet.</td></tr>')
+    currentTableRuns = runs
+    const pageSize = getTablePageSize()
+    const total = runs.length
+    const pageCount = Math.max(1, Math.ceil(total / pageSize))
+    tablePage = Math.min(Math.max(tablePage, 1), pageCount)
+    updateTableSummary(total, pageSize, pageCount)
+    $tablePrev.prop('disabled', tablePage <= 1 || total === 0)
+    $tableNext.prop('disabled', tablePage >= pageCount || total === 0)
+    if (!total) {
+      $tableBody.html('<tr><td colspan="10" class="text-muted">No runs match the current filters.</td></tr>')
       return
     }
     sectionDetailsByRunKey.clear()
-    const rows = runs.map((run, index) => {
+    const pageStart = (tablePage - 1) * pageSize
+    const pageRuns = runs.slice(pageStart, pageStart + pageSize)
+    const rows = pageRuns.map((run, index) => {
+      const absoluteIndex = pageStart + index
       const command = getRunCommandValue(run) || 'n/a'
       const commandTitle = run.run_command
         ? `Original: ${run.run_command}`
@@ -1064,30 +1158,33 @@ $(document).ready(function () {
       const warnings = getCount(run, 'warning_count')
       const errors = getCount(run, 'error_count')
       const traces = getCount(run, 'trace_count')
-      const counts = `W:${warnings} E:${errors} T:${traces}`
       const libraryTotals = getRunLibraryTotals(run)
-      const hasLibraryTotals = libraryTotals.movies > 0 || libraryTotals.episodes > 0 || libraryTotals.shows > 0
-      const libraryCounts = hasLibraryTotals
-        ? `M:${libraryTotals.movies} S:${libraryTotals.shows} Ep:${libraryTotals.episodes} Tot:${libraryTotals.total}`
-        : 'M:- S:- Ep:- Tot:-'
-      const countsTitle = `Warnings: ${warnings} | Errors: ${errors} | Tracebacks: ${traces} | Movies: ${libraryTotals.movies} | Shows: ${libraryTotals.shows} | Episodes: ${libraryTotals.episodes} | Total: ${libraryTotals.total}`
+      const countChips = [
+        renderCountChip('W', 'Warnings', warnings, 'warning'),
+        renderCountChip('E', 'Errors', errors, 'error'),
+        renderCountChip('T', 'Tracebacks', traces, 'trace'),
+        renderCountChip('M', 'Movies', libraryTotals.movies, 'movie'),
+        renderCountChip('S', 'Shows', libraryTotals.shows, 'show'),
+        renderCountChip('Ep', 'Episodes', libraryTotals.episodes, 'episode'),
+        renderCountChip('Tot', 'Total items', libraryTotals.total, 'total')
+      ].join('')
       const configLineCount = (typeof run.config_line_count === 'number' && Number.isFinite(run.config_line_count))
         ? run.config_line_count
         : 'n/a'
-      const sectionLines = buildSectionDetails(run.section_runtimes, run.run_time_seconds)
+      const runtimeParts = getRunTimeParts(run)
+      const sectionLines = buildSectionDetails(run.section_runtimes, runtimeParts.effective)
       const sectionSummary = sectionLines.length ? sectionLines[0] : 'n/a'
       const cacheLineCount = (typeof run.cache_line_count === 'number' && Number.isFinite(run.cache_line_count))
         ? run.cache_line_count
         : 'n/a'
       const sectionDetails = sectionLines.length > 1 ? sectionLines.slice(1) : []
-      const rowKey = (run.run_key && String(run.run_key).trim()) || `row-${index + 1}`
+      const rowKey = (run.run_key && String(run.run_key).trim()) || `row-${absoluteIndex + 1}`
       sectionDetailsByRunKey.set(rowKey, {
         summary: sectionSummary,
         details: sectionDetails
       })
       let sectionCell = `
-        <div class="d-flex flex-column align-items-center gap-1">
-          <div class="text-muted small text-center">${escapeHtml(sectionSummary)}</div>
+        <div class="logscan-card-inline">
       `
       if (sectionDetails.length) {
         sectionCell += `
@@ -1098,6 +1195,7 @@ $(document).ready(function () {
           </button>
         `
       }
+      sectionCell += `<span class="logscan-section-summary">${escapeHtml(sectionSummary)}</span>`
       sectionCell += '</div>'
       let kometaDisplay = run.kometa_version || 'n/a'
       if (run.kometa_version && run.kometa_newest_version && run.kometa_version !== run.kometa_newest_version) {
@@ -1106,22 +1204,19 @@ $(document).ready(function () {
       const runKey = run.run_key || rowKey
       return `
         <tr>
-          <td class="text-nowrap">${escapeHtml(getDisplayFinished(run))}</td>
-          <td>${escapeHtml(formatSeconds(run.run_time_seconds))}</td>
-          <td>${escapeHtml(run.config_name || 'default')}</td>
-          <td class="text-center">${escapeHtml(configLineCount)}</td>
-          <td class="text-center">${escapeHtml(cacheLineCount)}</td>
-          <td><span class="logscan-command" title="${escapeHtml(commandTitle)}">${escapeHtml(command)}</span></td>
-          <td title="${escapeHtml(countsTitle)}">
-            <div>${escapeHtml(counts)}</div>
-            <div class="text-muted small">${escapeHtml(libraryCounts)}</div>
-          </td>
-          <td>${escapeHtml(kometaDisplay)}</td>
-          <td class="text-center align-middle">${sectionCell}</td>
-          <td class="text-center align-middle">
+          ${renderRunCardCell('Finished', 'Timestamp of the run finishing.', escapeHtml(getDisplayFinished(run)), 'class="text-nowrap"')}
+          ${renderRunCardCell('Runtime', getRuntimeHelpText(run), escapeHtml(formatSeconds(runtimeParts.effective)))}
+          ${renderRunCardCell('Config', 'Config name detected for the run.', escapeHtml(run.config_name || 'default'))}
+          ${renderRunCardCell('Config lines', 'Non-comment lines captured from the redacted config output.', escapeHtml(String(configLineCount)))}
+          ${renderRunCardCell('Cache lines', 'Number of log lines that include "from Cache".', escapeHtml(String(cacheLineCount)))}
+          ${renderRunCardCell('Command', 'Sanitized Kometa command line.', `<span class="logscan-command" title="${escapeHtml(commandTitle)}">${escapeHtml(command)}</span>`)}
+          ${renderRunCardCell('Counts', 'W warnings, E errors, T tracebacks, M movies, S shows, Ep episodes, Tot total library items.', `<span class="logscan-count-chip-row">${countChips}</span>`)}
+          ${renderRunCardCell('Kometa', 'Version detected for the run, plus newest version when different.', escapeHtml(kometaDisplay))}
+          ${renderRunCardCell('Section runtimes', 'Runtime totals parsed per Kometa section.', sectionCell)}
+          ${renderRunCardCell('Report', 'Open the recommendations recorded for the run.', `
             <button type="button" class="btn nav-button btn-sm logscan-action-btn logscan-run-details"
               data-run-key="${escapeHtml(runKey)}">Open</button>
-          </td>
+          `)}
         </tr>
       `
     })
@@ -1131,7 +1226,7 @@ $(document).ready(function () {
   function renderRuntimeDistribution (runs) {
     if (!$runtime.length) return
     const durations = runs
-      .map(run => run.run_time_seconds)
+      .map(run => getEffectiveRunTimeSeconds(run))
       .filter(val => typeof val === 'number' && Number.isFinite(val) && val > 0)
     if (!durations.length) {
       $runtime.text('No runtime data yet.')
@@ -1540,17 +1635,29 @@ $(document).ready(function () {
       case 'finished_at':
         return getSortTimestamp(run)
       case 'run_time_seconds':
-        return typeof run.run_time_seconds === 'number' ? run.run_time_seconds : 0
+        return getEffectiveRunTimeSeconds(run)
       case 'config_name':
         return normalizeConfigName(run.config_name)
       case 'command_signature':
         return getRunCommandValue(run)
       case 'counts':
         return getCountsTotal(run)
+      case 'warning_count':
+      case 'error_count':
+      case 'trace_count':
+        return getCount(run, key)
       case 'config_line_count':
         return typeof run.config_line_count === 'number' ? run.config_line_count : 0
       case 'cache_line_count':
         return typeof run.cache_line_count === 'number' ? run.cache_line_count : 0
+      case 'library_movies':
+        return getRunLibraryTotals(run).movies
+      case 'library_shows':
+        return getRunLibraryTotals(run).shows
+      case 'library_episodes':
+        return getRunLibraryTotals(run).episodes
+      case 'library_total':
+        return getRunLibraryTotals(run).total
       case 'kometa_version':
         return run.kometa_version || ''
       case 'section_runtimes':
@@ -1598,6 +1705,8 @@ $(document).ready(function () {
     if ($button.length) {
       $button.addClass(sortState.dir === 'asc' ? 'is-asc' : 'is-desc')
     }
+    $tableSortKey.val(sortState.key)
+    $tableSortDir.val(sortState.dir === 'asc' ? 'asc' : 'desc')
   }
 
   function updateConfigFilter (runs) {
@@ -1788,6 +1897,11 @@ $(document).ready(function () {
     $reset.prop('disabled', disabled)
     $reingest.prop('disabled', disabled)
     $limit.prop('disabled', disabled)
+    $tableSortKey.prop('disabled', disabled)
+    $tableSortDir.prop('disabled', disabled)
+    $tablePageSize.prop('disabled', disabled)
+    $tablePrev.prop('disabled', disabled || tablePage <= 1 || currentTableRuns.length === 0)
+    $tableNext.prop('disabled', disabled || tablePage >= Math.max(1, Math.ceil(currentTableRuns.length / getTablePageSize())) || currentTableRuns.length === 0)
     $configFilter.prop('disabled', disabled)
     $commandFilter.prop('disabled', disabled)
     $dateStart.prop('disabled', disabled)
@@ -2082,21 +2196,67 @@ $(document).ready(function () {
         $counts.text('Unable to load log-level averages.')
         $issues.text('Unable to load issue trends.')
         $libraries.text('Unable to load library totals.')
+        if ($tableSummary.length) $tableSummary.text('Unable to load runs.')
+        if ($tablePageInfo.length) $tablePageInfo.text('No rows')
+        $tablePrev.prop('disabled', true)
+        $tableNext.prop('disabled', true)
         $tableBody.html('<tr><td colspan="10" class="text-muted">Unable to load runs.</td></tr>')
       })
   }
 
-  $limit.on('change', fetchRuns)
+  $limit.on('change', function () {
+    tablePage = 1
+    fetchRuns()
+  })
+  $tablePageSize.on('change', function () {
+    tablePage = 1
+    renderTable(currentTableRuns)
+  })
+  $tableSortKey.on('change', function () {
+    const key = String($tableSortKey.val() || 'finished_at')
+    if (!key) return
+    sortState.key = key
+    tablePage = 1
+    applyFiltersAndRender()
+  })
+  $tableSortDir.on('change', function () {
+    sortState.dir = $tableSortDir.val() === 'asc' ? 'asc' : 'desc'
+    tablePage = 1
+    applyFiltersAndRender()
+  })
+  $tablePrev.on('click', function () {
+    if (tablePage <= 1) return
+    tablePage -= 1
+    renderTable(currentTableRuns)
+  })
+  $tableNext.on('click', function () {
+    const pageCount = Math.max(1, Math.ceil(currentTableRuns.length / getTablePageSize()))
+    if (tablePage >= pageCount) return
+    tablePage += 1
+    renderTable(currentTableRuns)
+  })
+  if (tableCollapseEl) {
+    tableCollapseEl.addEventListener('shown.bs.collapse', function () {
+      $tableToggle.text('Hide table')
+    })
+    tableCollapseEl.addEventListener('hidden.bs.collapse', function () {
+      $tableToggle.text('Show table')
+    })
+  }
   $configFilter.on('change', function () {
+    tablePage = 1
     loadPreferences().then(() => applyFiltersAndRender())
   })
   $commandFilter.on('change', function () {
+    tablePage = 1
     applyFiltersAndRender()
   })
   $dateStart.on('change', function () {
+    tablePage = 1
     applyFiltersAndRender()
   })
   $dateEnd.on('change', function () {
+    tablePage = 1
     applyFiltersAndRender()
   })
   $libraryFilter.on('change', function () {
@@ -2116,6 +2276,7 @@ $(document).ready(function () {
   })
   $resetFilters.on('click', function () {
     $limit.val('500')
+    tablePage = 1
     $configFilter.val('')
     $commandFilter.val('')
     $libraryFilter.val('')
@@ -2193,6 +2354,7 @@ $(document).ready(function () {
   $('#logscan-trends-table thead').on('click', '.logscan-sort-button', function () {
     const key = $(this).data('sort')
     if (!key) return
+    tablePage = 1
     if (sortState.key === key) {
       sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc'
     } else {

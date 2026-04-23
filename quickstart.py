@@ -108,6 +108,7 @@ VALIDATION_REASON_LABELS = {
     "missing_plex_validation": "Plex not validated",
     "no_libraries": "No libraries selected",
     "invalid_paths": "Invalid paths",
+    "missing_library_defaults": "Missing library defaults",
     "missing_placeholder_imdb": "Missing placeholder IMDb ID",
     "invalid_fields": "Invalid fields",
     "no_webhooks": "No webhooks configured",
@@ -123,6 +124,85 @@ VALIDATION_KEY_SUGGESTIONS = {
         "playlist_sync_to_user": "playlist_sync_to_users",
     }
 }
+QS_REQUIRED_STEP_KEYS = ["001-start", "010-plex", "020-tmdb", "025-libraries", "150-settings"]
+QS_REVIEW_STEP_KEYS = ["900-final", "905-analytics", "910-sponsor"]
+QS_VALIDATION_STEP_KEYS = {
+    "010-plex",
+    "020-tmdb",
+    "025-libraries",
+    "030-tautulli",
+    "040-github",
+    "050-omdb",
+    "060-mdblist",
+    "070-notifiarr",
+    "080-gotify",
+    "085-ntfy",
+    "090-webhooks",
+    "100-anidb",
+    "110-radarr",
+    "120-sonarr",
+    "130-trakt",
+    "140-mal",
+    "150-settings",
+}
+QS_STATUS_ORDER = {"unknown": 0, "ok": 1, "warn": 2, "error": 3}
+QS_WARN_REASONS = {
+    "missing_credentials",
+    "missing_tokens",
+    "no_libraries",
+    "missing_settings",
+    "disabled",
+    "no_webhooks",
+}
+QS_ERROR_REASONS = {
+    "missing_plex_validation",
+    "token_invalid",
+    "account_locked",
+    "validation_error",
+    "invalid_paths",
+    "invalid_fields",
+    "missing_library_defaults",
+    "missing_placeholder_imdb",
+}
+QS_TAUTULLI_REQUIRED_STEP_KEY = "030-tautulli"
+QS_OMDB_REQUIRED_STEP_KEY = "050-omdb"
+QS_MDBLIST_REQUIRED_STEP_KEY = "060-mdblist"
+QS_ANIDB_REQUIRED_STEP_KEY = "100-anidb"
+QS_RADARR_REQUIRED_STEP_KEY = "110-radarr"
+QS_SONARR_REQUIRED_STEP_KEY = "120-sonarr"
+QS_TRAKT_REQUIRED_STEP_KEY = "130-trakt"
+QS_MAL_REQUIRED_STEP_KEY = "140-mal"
+QS_TAUTULLI_DEP_COLLECTION_IDS = {"collection_tautulli"}
+QS_TRAKT_DEP_COLLECTION_IDS = {"collection_trakt"}
+QS_MAL_DEP_COLLECTION_IDS = {"collection_myanimelist"}
+QS_ANIDB_DEP_COLLECTION_IDS = {"collection_use_anidb"}
+QS_ANIDB_DEP_TEMPLATE_COLLECTION_IDS = {"use_anidb"}
+QS_OMDB_DEP_SOURCE_PREFIXES = ("omdb",)
+QS_MDBLIST_DEP_SOURCE_PREFIXES = ("mdb",)
+QS_ANIDB_DEP_SOURCE_PREFIXES = ("anidb",)
+QS_MDBLIST_OVERLAY_IMAGE_VALUES = {"letterboxd", "metacritic", "rt_tomato", "rt_popcorn", "mdb"}
+QS_ANIDB_OVERLAY_IMAGE_VALUES = {"anidb"}
+QS_TRAKT_OVERLAY_IMAGE_VALUES = {"trakt"}
+QS_MAL_OVERLAY_IMAGE_VALUES = {"mal"}
+QS_RADARR_DEP_ATTRIBUTE_PREFIXES = ("radarr_add_all", "radarr_remove_by_tag")
+QS_RADARR_DEP_COLLECTION_PREFIXES = ("collection_radarr_",)
+QS_RADARR_DEP_TEMPLATE_COLLECTION_PREFIXES = ("radarr_add_missing_",)
+QS_SONARR_DEP_ATTRIBUTE_PREFIXES = ("sonarr_add_all", "sonarr_remove_by_tag")
+QS_SONARR_DEP_COLLECTION_PREFIXES = ("collection_sonarr_",)
+QS_SONARR_DEP_TEMPLATE_COLLECTION_PREFIXES = ("sonarr_add_missing_",)
+QS_MAL_DEP_ATTRIBUTE_OPERATIONS = {
+    "mass_genre_update",
+    "mass_content_rating_update",
+    "mass_original_title_update",
+    "mass_studio_update",
+    "mass_originally_available_update",
+    "mass_added_at_update",
+    "mass_audience_rating_update",
+    "mass_critic_rating_update",
+    "mass_user_rating_update",
+}
+QS_MAL_DEP_ATTRIBUTE_VALUES = {"mal", "mal_english", "mal_japanese"}
+QS_FINAL_VALIDATION_TTL_HOURS = 12
 
 
 def utc_now_iso():
@@ -179,6 +259,1073 @@ def build_validation_summary(errors):
         )
 
     return summary
+
+
+def _normalize_status(value):
+    status = str(value or "").strip().lower()
+    if status in ("unknown", "ok", "warn", "error"):
+        return status
+    return "warn"
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _is_truthy_setting_value(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"", "0", "false", "none", "null", "[]", "{}"}:
+            return False
+        return True
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) > 0
+    return bool(value)
+
+
+def _parse_json_array(value):
+    if isinstance(value, list):
+        return value
+    if not isinstance(value, str):
+        return []
+    text = value.strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _library_prefix_from_key(key):
+    if not isinstance(key, str) or not key.startswith(("mov-library_", "sho-library_")):
+        return None
+    for marker in (
+        "-movie-template_",
+        "-show-template_",
+        "-season-template_",
+        "-episode-template_",
+        "-movie-overlay_",
+        "-show-overlay_",
+        "-season-overlay_",
+        "-episode-overlay_",
+    ):
+        if marker in key:
+            return key.split(marker, 1)[0]
+    if "-template_" in key:
+        return key.split("-template_", 1)[0]
+    if "-attribute_" in key:
+        return key.split("-attribute_", 1)[0]
+    if "-collection_" in key:
+        return key.split("-collection_", 1)[0]
+    if "-overlay_" in key:
+        return key.split("-overlay_", 1)[0]
+    if "-top_level_" in key:
+        return key.split("-top_level_", 1)[0]
+    if key.endswith("-library"):
+        return key[: -len("-library")]
+    return None
+
+
+def _active_library_prefixes(libraries_data):
+    if not isinstance(libraries_data, dict):
+        return set()
+
+    active_prefixes = set()
+    for raw_key, raw_value in libraries_data.items():
+        key = str(raw_key or "").strip().lower()
+        if not key.endswith("-library"):
+            continue
+        prefix = _library_prefix_from_key(key)
+        if prefix and _is_truthy_setting_value(raw_value):
+            active_prefixes.add(prefix)
+    return active_prefixes
+
+
+def _dependency_reason_label(libraries_data, prefix):
+    library_name = libraries_data.get(f"{prefix}-library") if isinstance(libraries_data, dict) else None
+    if isinstance(library_name, str) and library_name.strip():
+        return library_name.strip()
+    return prefix
+
+
+def _append_dependency_reason(reasons, seen, libraries_data, prefix, detail):
+    label = _dependency_reason_label(libraries_data, prefix)
+    reason = f"{label}: {detail}"
+    normalized = reason.lower()
+    if normalized in seen:
+        return
+    seen.add(normalized)
+    reasons.append(reason)
+
+
+def _libraries_data_collection_dependency_reasons(libraries_data, collection_ids, detail):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    active_prefixes = _active_library_prefixes(libraries_data)
+    reasons = []
+    seen = set()
+
+    for raw_key, raw_value in libraries_data.items():
+        key = str(raw_key or "").strip().lower()
+        if not key or "-collection_" not in key or not _is_truthy_setting_value(raw_value):
+            continue
+
+        prefix = _library_prefix_from_key(key)
+        if prefix and prefix not in active_prefixes:
+            continue
+
+        collection_id = f"collection_{key.rsplit('-collection_', 1)[1]}"
+        if collection_id in collection_ids:
+            _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+
+    return reasons
+
+
+def _libraries_data_template_collection_dependency_reasons(libraries_data, child_ids, detail):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    active_prefixes = _active_library_prefixes(libraries_data)
+    reasons = []
+    seen = set()
+    normalized_child_ids = tuple(str(child_id or "").strip().lower() for child_id in child_ids if str(child_id or "").strip())
+    if not normalized_child_ids:
+        return reasons
+
+    for raw_key, raw_value in libraries_data.items():
+        key = str(raw_key or "").strip().lower()
+        if not key or "-template_collection_" not in key or not _is_truthy_setting_value(raw_value):
+            continue
+
+        prefix = _library_prefix_from_key(key)
+        if prefix and prefix not in active_prefixes:
+            continue
+
+        matched_child_id = None
+        for child_id in normalized_child_ids:
+            if re.search(rf"-template_collection_[a-z0-9_]+_{re.escape(child_id)}$", key):
+                matched_child_id = child_id
+                break
+        if matched_child_id:
+            _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+
+    return reasons
+
+
+def _libraries_data_service_dependency_reasons(libraries_data, attribute_prefixes, collection_prefixes, template_collection_prefixes=()):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    active_prefixes = _active_library_prefixes(libraries_data)
+    reasons = []
+    seen = set()
+    normalized_attribute_prefixes = tuple(str(prefix or "").strip().lower() for prefix in attribute_prefixes if str(prefix or "").strip())
+    normalized_collection_prefixes = tuple(str(prefix or "").strip().lower() for prefix in collection_prefixes if str(prefix or "").strip())
+    normalized_template_collection_prefixes = tuple(
+        str(prefix or "").strip().lower() for prefix in template_collection_prefixes if str(prefix or "").strip()
+    )
+
+    for raw_key, raw_value in libraries_data.items():
+        key = str(raw_key or "").strip().lower()
+        if not key or not _is_truthy_setting_value(raw_value):
+            continue
+
+        prefix = _library_prefix_from_key(key)
+        if prefix and prefix not in active_prefixes:
+            continue
+
+        if "-attribute_" in key:
+            attribute_key = key.split("-attribute_", 1)[1]
+            matched_attribute = next(
+                (
+                    attr_prefix
+                    for attr_prefix in normalized_attribute_prefixes
+                    if attribute_key == attr_prefix or attribute_key.startswith(f"{attr_prefix}_")
+                ),
+                None,
+            )
+            if matched_attribute:
+                detail = f"{matched_attribute} configured" if attribute_key.endswith("_custom") else f"{attribute_key} enabled"
+                _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+                continue
+
+        if "-collection_" in key:
+            collection_id = f"collection_{key.rsplit('-collection_', 1)[1]}"
+            if any(collection_id.startswith(collection_prefix) for collection_prefix in normalized_collection_prefixes):
+                detail = f"{collection_id} enabled"
+                _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+                continue
+
+        if "-template_collection_" in key:
+            matched_child_key = None
+            for template_prefix in normalized_template_collection_prefixes:
+                match = re.search(
+                    rf"-template_collection_[a-z0-9_]+_({re.escape(template_prefix)}[a-z0-9_]*)$",
+                    key,
+                )
+                if match:
+                    matched_child_key = match.group(1)
+                    break
+            if matched_child_key:
+                detail = f"{matched_child_key} enabled"
+                _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+
+    return reasons
+
+
+def _libraries_data_overlay_rating_dependency_reasons(libraries_data, image_values):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    active_prefixes = _active_library_prefixes(libraries_data)
+    reasons = []
+    seen = set()
+    normalized_images = {str(value or "").strip().lower() for value in image_values if str(value or "").strip()}
+    if not normalized_images:
+        return reasons
+
+    for raw_key, raw_value in libraries_data.items():
+        key = str(raw_key or "").strip().lower()
+        selected_image = str(raw_value or "").strip().lower()
+        if selected_image not in normalized_images:
+            continue
+
+        match = re.match(
+            r"^(?P<prefix>(?:mov|sho)-library_[a-z0-9_]+)-(?P<builder>movie|show|season|episode)-template_overlay_ratings\[rating[123]_image\]$",
+            key,
+        )
+        if not match:
+            continue
+
+        prefix = match.group("prefix")
+        builder = match.group("builder")
+        if prefix not in active_prefixes:
+            continue
+
+        overlay_toggle_key = f"{prefix}-{builder}-overlay_ratings"
+        if not _is_truthy_setting_value(libraries_data.get(overlay_toggle_key)):
+            continue
+
+        detail = f"{builder} ratings overlay uses {selected_image}"
+        _append_dependency_reason(reasons, seen, libraries_data, prefix, detail)
+
+    return reasons
+
+
+def _attribute_dependency_source_reasons(libraries_data, source_prefixes):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    active_prefixes = _active_library_prefixes(libraries_data)
+    reasons = []
+    seen = set()
+    normalized_prefixes = tuple(str(prefix or "").strip().lower() for prefix in source_prefixes if str(prefix or "").strip())
+    if not normalized_prefixes:
+        return reasons
+
+    def matches_source(source_value):
+        normalized = str(source_value or "").strip().lower()
+        if not normalized:
+            return False
+        return any(normalized == prefix or normalized.startswith(f"{prefix}_") for prefix in normalized_prefixes)
+
+    def extract_operation_and_source(key):
+        attr_body = key.split("-attribute_", 1)[1] if "-attribute_" in key else ""
+        if not attr_body or attr_body.endswith("_order"):
+            return None, None
+        parts = [part for part in attr_body.split("_") if part]
+        if len(parts) < 3:
+            return None, None
+        for split_index in range(2, len(parts)):
+            operation = "_".join(parts[:split_index])
+            source_value = "_".join(parts[split_index:])
+            if operation.startswith("mass_") and matches_source(source_value):
+                return operation, source_value
+        return None, None
+
+    for raw_key, raw_value in libraries_data.items():
+        key = str(raw_key or "").strip().lower()
+        if not key or "-attribute_" not in key:
+            continue
+
+        prefix = _library_prefix_from_key(key)
+        if prefix and prefix not in active_prefixes:
+            continue
+
+        operation, source_value = extract_operation_and_source(key)
+        if operation and source_value and _is_truthy_setting_value(raw_value):
+            detail = f"{operation} uses {source_value}"
+            _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+            continue
+
+        order_match = re.search(r"-attribute_(mass_[a-z0-9_]+)_order$", key)
+        if not order_match:
+            continue
+
+        operation = order_match.group(1)
+        matched_sources = []
+        for entry in _parse_json_array(raw_value):
+            source_value = str(entry or "").strip().lower()
+            if matches_source(source_value):
+                matched_sources.append(source_value)
+        if matched_sources:
+            joined_sources = ", ".join(sorted(set(matched_sources)))
+            detail = f"{operation} order includes {joined_sources}"
+            _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+
+    return reasons
+
+
+def _config_dependency_reasons(section_rows, dependency_resolver):
+    if not isinstance(section_rows, dict):
+        return []
+    libraries_row = section_rows.get("libraries")
+    if not isinstance(libraries_row, dict):
+        return []
+    libraries_payload = libraries_row.get("data")
+    if not isinstance(libraries_payload, dict):
+        return []
+    libraries_data = libraries_payload.get("libraries", {})
+    return dependency_resolver(libraries_data)
+
+
+def _libraries_data_requires_mal(libraries_data):
+    return bool(_libraries_data_mal_dependency_reasons(libraries_data))
+
+
+def _libraries_data_tautulli_dependency_reasons(libraries_data):
+    return _libraries_data_collection_dependency_reasons(
+        libraries_data,
+        QS_TAUTULLI_DEP_COLLECTION_IDS,
+        "Tautulli Charts collection enabled",
+    )
+
+
+def _libraries_data_trakt_dependency_reasons(libraries_data):
+    collection_reasons = _libraries_data_collection_dependency_reasons(
+        libraries_data,
+        QS_TRAKT_DEP_COLLECTION_IDS,
+        "Trakt Charts collection enabled",
+    )
+    overlay_reasons = _libraries_data_overlay_rating_dependency_reasons(
+        libraries_data,
+        QS_TRAKT_OVERLAY_IMAGE_VALUES,
+    )
+    return collection_reasons + [reason for reason in overlay_reasons if reason not in collection_reasons]
+
+
+def _libraries_data_omdb_dependency_reasons(libraries_data):
+    return _attribute_dependency_source_reasons(
+        libraries_data,
+        QS_OMDB_DEP_SOURCE_PREFIXES,
+    )
+
+
+def _libraries_data_mdblist_dependency_reasons(libraries_data):
+    attribute_reasons = _attribute_dependency_source_reasons(
+        libraries_data,
+        QS_MDBLIST_DEP_SOURCE_PREFIXES,
+    )
+    overlay_reasons = _libraries_data_overlay_rating_dependency_reasons(
+        libraries_data,
+        QS_MDBLIST_OVERLAY_IMAGE_VALUES,
+    )
+    return attribute_reasons + [reason for reason in overlay_reasons if reason not in attribute_reasons]
+
+
+def _libraries_data_anidb_dependency_reasons(libraries_data):
+    attribute_reasons = _attribute_dependency_source_reasons(
+        libraries_data,
+        QS_ANIDB_DEP_SOURCE_PREFIXES,
+    )
+    collection_reasons = _libraries_data_collection_dependency_reasons(
+        libraries_data,
+        QS_ANIDB_DEP_COLLECTION_IDS,
+        "AniDB Popular collection enabled",
+    )
+    template_collection_reasons = _libraries_data_template_collection_dependency_reasons(
+        libraries_data,
+        QS_ANIDB_DEP_TEMPLATE_COLLECTION_IDS,
+        "AniDB Popular collection enabled",
+    )
+    overlay_reasons = _libraries_data_overlay_rating_dependency_reasons(
+        libraries_data,
+        QS_ANIDB_OVERLAY_IMAGE_VALUES,
+    )
+    merged_reasons = attribute_reasons + [reason for reason in collection_reasons if reason not in attribute_reasons]
+    merged_reasons += [reason for reason in template_collection_reasons if reason not in merged_reasons]
+    return merged_reasons + [reason for reason in overlay_reasons if reason not in merged_reasons]
+
+
+def _libraries_data_radarr_dependency_reasons(libraries_data):
+    return _libraries_data_service_dependency_reasons(
+        libraries_data,
+        QS_RADARR_DEP_ATTRIBUTE_PREFIXES,
+        QS_RADARR_DEP_COLLECTION_PREFIXES,
+        QS_RADARR_DEP_TEMPLATE_COLLECTION_PREFIXES,
+    )
+
+
+def _libraries_data_sonarr_dependency_reasons(libraries_data):
+    return _libraries_data_service_dependency_reasons(
+        libraries_data,
+        QS_SONARR_DEP_ATTRIBUTE_PREFIXES,
+        QS_SONARR_DEP_COLLECTION_PREFIXES,
+        QS_SONARR_DEP_TEMPLATE_COLLECTION_PREFIXES,
+    )
+
+
+def _libraries_data_mal_dependency_reasons(libraries_data):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    active_prefixes = _active_library_prefixes(libraries_data)
+    reasons = []
+    seen = set()
+
+    for raw_key, raw_value in libraries_data.items():
+        key = str(raw_key or "").strip().lower()
+        if not key:
+            continue
+
+        prefix = _library_prefix_from_key(key)
+        if prefix and prefix not in active_prefixes:
+            continue
+
+        if "-collection_" in key and _is_truthy_setting_value(raw_value):
+            collection_id = f"collection_{key.rsplit('-collection_', 1)[1]}"
+            if collection_id in QS_MAL_DEP_COLLECTION_IDS:
+                _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", "MyAnimeList Charts collection enabled")
+                continue
+
+        attr_match = re.search(r"-attribute_(mass_[a-z0-9_]+)_(mal(?:_english|_japanese)?)$", key)
+        if attr_match and _is_truthy_setting_value(raw_value):
+            operation = attr_match.group(1)
+            source_value = attr_match.group(2)
+            if operation in QS_MAL_DEP_ATTRIBUTE_OPERATIONS and source_value in QS_MAL_DEP_ATTRIBUTE_VALUES:
+                detail = f"{operation} uses {source_value}"
+                _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+                continue
+
+        order_match = re.search(r"-attribute_(mass_[a-z0-9_]+)_order$", key)
+        if not order_match:
+            continue
+        operation = order_match.group(1)
+        if operation not in QS_MAL_DEP_ATTRIBUTE_OPERATIONS:
+            continue
+        matched_sources = []
+        for entry in _parse_json_array(raw_value):
+            source_value = str(entry or "").strip().lower()
+            if source_value in QS_MAL_DEP_ATTRIBUTE_VALUES:
+                matched_sources.append(source_value)
+        if matched_sources:
+            joined_sources = ", ".join(sorted(set(matched_sources)))
+            detail = f"{operation} order includes {joined_sources}"
+            _append_dependency_reason(reasons, seen, libraries_data, prefix or "library", detail)
+
+    overlay_reasons = _libraries_data_overlay_rating_dependency_reasons(
+        libraries_data,
+        QS_MAL_OVERLAY_IMAGE_VALUES,
+    )
+    return reasons + [reason for reason in overlay_reasons if reason not in reasons]
+
+
+def _config_requires_mal(section_rows):
+    if not isinstance(section_rows, dict):
+        return False
+    libraries_row = section_rows.get("libraries")
+    if not isinstance(libraries_row, dict):
+        return False
+    libraries_payload = libraries_row.get("data")
+    if not isinstance(libraries_payload, dict):
+        return False
+    libraries_data = libraries_payload.get("libraries", {})
+    return _libraries_data_requires_mal(libraries_data)
+
+
+def _config_tautulli_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_tautulli_dependency_reasons)
+
+
+def _config_omdb_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_omdb_dependency_reasons)
+
+
+def _config_mdblist_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_mdblist_dependency_reasons)
+
+
+def _config_anidb_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_anidb_dependency_reasons)
+
+
+def _config_radarr_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_radarr_dependency_reasons)
+
+
+def _config_sonarr_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_sonarr_dependency_reasons)
+
+
+def _config_trakt_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_trakt_dependency_reasons)
+
+
+def _config_mal_dependency_reasons(section_rows):
+    return _config_dependency_reasons(section_rows, _libraries_data_mal_dependency_reasons)
+
+
+def _worst_status(statuses):
+    worst = "ok"
+    for status in statuses:
+        normalized = _normalize_status(status)
+        if QS_STATUS_ORDER.get(normalized, 1) > QS_STATUS_ORDER.get(worst, 1):
+            worst = normalized
+    return worst
+
+
+def _derive_live_final_validation_status(step_statuses, template_keys):
+    validation_states = []
+    for key in template_keys:
+        if key not in QS_VALIDATION_STEP_KEYS:
+            continue
+        if key not in step_statuses:
+            continue
+        validation_states.append(_normalize_status(step_statuses.get(key)))
+
+    if not validation_states:
+        return "warn"
+    if any(state == "error" for state in validation_states):
+        return "error"
+    if any(state == "warn" for state in validation_states):
+        return "warn"
+    if any(state == "ok" for state in validation_states):
+        return "ok"
+    return "warn"
+
+
+def _build_live_validation_rollup(step_statuses, template_keys):
+    counts = {"validated": 0, "failed": 0, "skipped": 0, "unknown": 0}
+    for key in template_keys:
+        if key not in QS_VALIDATION_STEP_KEYS:
+            continue
+        state = _normalize_status(step_statuses.get(key))
+        if state == "ok":
+            counts["validated"] += 1
+        elif state == "error":
+            counts["failed"] += 1
+        elif state == "warn":
+            counts["skipped"] += 1
+        else:
+            counts["unknown"] += 1
+
+    if counts["failed"] > 0:
+        state = "error"
+    elif counts["skipped"] > 0:
+        state = "warn"
+    elif counts["validated"] > 0:
+        state = "ok"
+    else:
+        state = "unknown"
+
+    summary_text = (
+        f"Current. Validated: {counts['validated']} \u2022 "
+        f"Failed: {counts['failed']} \u2022 "
+        f"Pending: {counts['skipped']}"
+    )
+    if counts["unknown"] > 0:
+        summary_text += f" \u2022 Not checked: {counts['unknown']}"
+    summary_text += "."
+
+    return {"counts": counts, "state": state, "summary_text": summary_text}
+
+
+def _latest_iso_timestamp(values):
+    latest_dt = None
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if latest_dt is None or parsed > latest_dt:
+            latest_dt = parsed
+    return latest_dt.isoformat().replace("+00:00", "Z") if latest_dt else None
+
+
+def _format_validation_age(iso_text):
+    text = str(iso_text or "").strip()
+    if not text:
+        return "Never", "never"
+    try:
+        dt_value = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return "Unknown", "never"
+    if dt_value.tzinfo is None:
+        dt_value = dt_value.replace(tzinfo=timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    delta = now_utc - dt_value.astimezone(timezone.utc)
+    if delta.total_seconds() < 0:
+        delta = timedelta(0)
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        return "Just now", "fresh"
+    if seconds < 3600:
+        return f"{max(1, seconds // 60)}m ago", "fresh"
+    if seconds < 86400:
+        hours = max(1, seconds // 3600)
+        return f"{hours}h ago", "stale"
+    days = max(1, seconds // 86400)
+    return f"{days}d ago", "stale"
+
+
+def _parse_iso_datetime(iso_text):
+    text = str(iso_text or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _bulk_validation_is_fresh(iso_text, ttl_hours=QS_FINAL_VALIDATION_TTL_HOURS):
+    parsed = _parse_iso_datetime(iso_text)
+    if parsed is None:
+        return False
+    return datetime.now(timezone.utc) - parsed <= timedelta(hours=ttl_hours)
+
+
+def _build_final_gate(workspace_status, template_list, validation_bulk_rollup_at):
+    label_map = {file.rsplit(".", 1)[0]: display_name for file, display_name in template_list or []}
+    step_statuses = workspace_status.get("step_statuses", {}) if isinstance(workspace_status, dict) else {}
+    required_keys = workspace_status.get("required_keys", []) if isinstance(workspace_status, dict) else []
+    optional_keys = workspace_status.get("optional_keys", []) if isinstance(workspace_status, dict) else []
+
+    blockers = []
+    seen = set()
+    for key in required_keys:
+        state = step_statuses.get(key, "warn")
+        if state == "ok":
+            continue
+        blockers.append({"key": key, "label": label_map.get(key, key), "state": state, "group": "required"})
+        seen.add(key)
+
+    for key in optional_keys:
+        state = step_statuses.get(key, "unknown")
+        if state not in {"warn", "error"} or key in seen:
+            continue
+        blockers.append({"key": key, "label": label_map.get(key, key), "state": state, "group": "optional"})
+        seen.add(key)
+
+    dependency_defs = [
+        ("tautulli", QS_TAUTULLI_REQUIRED_STEP_KEY, "Tautulli", "tautulli_requirement_reasons", "qs-tautulli-required-hint"),
+        ("omdb", QS_OMDB_REQUIRED_STEP_KEY, "OMDb", "omdb_requirement_reasons", "qs-omdb-required-hint"),
+        ("mdblist", QS_MDBLIST_REQUIRED_STEP_KEY, "MDBList", "mdblist_requirement_reasons", "qs-mdblist-required-hint"),
+        ("anidb", QS_ANIDB_REQUIRED_STEP_KEY, "AniDB", "anidb_requirement_reasons", "qs-anidb-required-hint"),
+        ("radarr", QS_RADARR_REQUIRED_STEP_KEY, "Radarr", "radarr_requirement_reasons", "qs-radarr-required-hint"),
+        ("sonarr", QS_SONARR_REQUIRED_STEP_KEY, "Sonarr", "sonarr_requirement_reasons", "qs-sonarr-required-hint"),
+        ("trakt", QS_TRAKT_REQUIRED_STEP_KEY, "Trakt", "trakt_requirement_reasons", "qs-trakt-required-hint"),
+        ("mal", QS_MAL_REQUIRED_STEP_KEY, "MyAnimeList", "mal_requirement_reasons", "qs-mal-required-hint"),
+    ]
+    dependency_cards = []
+    for provider, step_key, label, reasons_key, css_class in dependency_defs:
+        reasons = workspace_status.get(reasons_key, []) if isinstance(workspace_status, dict) else []
+        if not reasons or step_statuses.get(step_key) == "ok":
+            continue
+        dependency_cards.append(
+            {
+                "provider": provider,
+                "key": step_key,
+                "label": label,
+                "title": f"{label} required by",
+                "reasons": reasons,
+                "state": step_statuses.get(step_key, "warn"),
+                "css_class": css_class,
+            }
+        )
+    dependency_keys = {card["key"] for card in dependency_cards}
+    setup_blockers = [blocker for blocker in blockers if blocker.get("key") not in dependency_keys]
+
+    bulk_fresh = _bulk_validation_is_fresh(validation_bulk_rollup_at)
+    if blockers:
+        stage = "todo"
+    elif not bulk_fresh:
+        stage = "freshness"
+    else:
+        stage = "config"
+
+    return {
+        "stage": stage,
+        "todo_count": len(blockers),
+        "todo_blockers": blockers,
+        "dependency_cards": dependency_cards,
+        "setup_blockers": setup_blockers,
+        "bulk_validation_fresh": bulk_fresh,
+        "bulk_validation_at": validation_bulk_rollup_at or "",
+        "validation_ttl_hours": QS_FINAL_VALIDATION_TTL_HOURS,
+        "can_build_config": not blockers and bulk_fresh,
+        "config_valid": False,
+    }
+
+
+def _is_nonblank_setting(value):
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return True
+    text = str(value).strip()
+    if not text:
+        return False
+    return text.lower() not in {"none", "null", "false"}
+
+
+def _is_meaningful_optional_status_input(value):
+    if not _is_nonblank_setting(value):
+        return False
+    text = str(value).strip().lower()
+    # UI template placeholders can be persisted as defaults; they should not
+    # make an optional page look user-configured in the workspace menu.
+    return not (text.startswith("enter ") and any(token in text for token in ("token", "api key", "url", "client")))
+
+
+def _has_meaningful_optional_input(template_key, payload):
+    if not isinstance(payload, dict):
+        return False
+
+    # Playlists intentionally treat pass-through differently (handled in its own branch).
+    if template_key == "027-playlist_files":
+        return True
+
+    if template_key == "100-anidb":
+        anidb = payload.get("anidb", {})
+        return isinstance(anidb, dict) and helpers.booler(anidb.get("enable"))
+
+    simple_key_requirements = {
+        "030-tautulli": ("tautulli", ("url", "apikey")),
+        "040-github": ("github", ("token",)),
+        "050-omdb": ("omdb", ("apikey",)),
+        "060-mdblist": ("mdblist", ("apikey",)),
+        "070-notifiarr": ("notifiarr", ("apikey",)),
+        "080-gotify": ("gotify", ("url", "token")),
+        "085-ntfy": ("ntfy", ("url", "token", "topic")),
+        "090-webhooks": ("webhooks", ("notifiarr", "gotify", "ntfy", "slack", "discord", "webhook", "url")),
+        "110-radarr": ("radarr", ("url", "token")),
+        "120-sonarr": ("sonarr", ("url", "token")),
+    }
+
+    req = simple_key_requirements.get(template_key)
+    if req:
+        section_name, keys = req
+        section_data = payload.get(section_name, {})
+        if isinstance(section_data, dict):
+            if template_key == "090-webhooks":
+                return any(_is_meaningful_optional_status_input(value) for value in section_data.values())
+            return any(_is_meaningful_optional_status_input(section_data.get(key)) for key in keys)
+        return False
+
+    if template_key == "130-trakt":
+        trakt = payload.get("trakt", {})
+        if not isinstance(trakt, dict):
+            return False
+        auth = trakt.get("authorization", {}) if isinstance(trakt.get("authorization"), dict) else {}
+        return any(
+            _is_meaningful_optional_status_input(value)
+            for value in (
+                trakt.get("client_id"),
+                trakt.get("client_secret"),
+                trakt.get("pin"),
+                auth.get("access_token"),
+                auth.get("refresh_token"),
+            )
+        )
+
+    if template_key == "140-mal":
+        mal = payload.get("mal", {})
+        if not isinstance(mal, dict):
+            return False
+        auth = mal.get("authorization", {}) if isinstance(mal.get("authorization"), dict) else {}
+        return any(
+            _is_meaningful_optional_status_input(value)
+            for value in (
+                mal.get("client_id"),
+                mal.get("client_secret"),
+                mal.get("localhost_url"),
+                auth.get("access_token"),
+                auth.get("refresh_token"),
+            )
+        )
+
+    # For unknown validation-backed optional steps, keep prior behavior.
+    return True
+
+
+def _derive_step_status(template_key, group, section_rows, config_exists):
+    if template_key == "001-start":
+        return "ok" if config_exists else "error"
+
+    if template_key == "900-final":
+        return "warn"
+
+    if template_key in {"905-analytics", "910-sponsor"}:
+        return "ok"
+
+    section_name = template_key.split("-", 1)[1] if "-" in template_key else template_key
+    section_entry = section_rows.get(section_name) if isinstance(section_rows, dict) else None
+    section_entry = section_entry if isinstance(section_entry, dict) else {}
+    section_row_present = bool(section_entry)
+
+    validated = helpers.booler(section_entry.get("validated", False))
+    user_entered = helpers.booler(section_entry.get("user_entered", False))
+    payload = section_entry.get("data")
+    payload = payload if isinstance(payload, dict) else {}
+    validation_status = str(payload.get("validation_status") or "").strip().lower()
+    validation_reason = str(payload.get("validation_reason") or "").strip().lower()
+    was_previously_validated = bool(payload.get("validated_at"))
+    if template_key == "027-playlist_files":
+        playlist_payload = payload.get("playlist_files", payload if isinstance(payload, dict) else {})
+        if isinstance(playlist_payload, dict) and isinstance(playlist_payload.get("playlist_files"), dict):
+            playlist_payload = playlist_payload.get("playlist_files", {})
+        playlist_libraries = ""
+        if isinstance(playlist_payload, dict):
+            raw_libraries = playlist_payload.get("libraries")
+            if isinstance(raw_libraries, list):
+                selected_libraries = [str(item).strip() for item in raw_libraries if str(item).strip()]
+            else:
+                playlist_libraries = str(raw_libraries or "")
+                selected_libraries = [item.strip() for item in playlist_libraries.split(",") if item.strip()]
+        else:
+            selected_libraries = []
+
+        if validation_status == "failed":
+            return "error"
+        if selected_libraries:
+            # Playlist selection itself is the completion signal for this optional page.
+            return "ok"
+
+        # If user has visited/passed-through this page (even with no libraries selected),
+        # treat it as intentionally acknowledged/valid.
+        was_visited = section_row_present and (
+            user_entered
+            or bool(validation_status)
+            or bool(payload.get("validation_updated_at"))
+            or bool(payload.get("validated_at"))
+        )
+        if was_visited:
+            return "ok"
+        return "unknown"
+
+    if template_key in QS_VALIDATION_STEP_KEYS:
+        if group == "optional" and not _has_meaningful_optional_input(template_key, payload):
+            return "unknown"
+
+        if validated or validation_status == "validated":
+            return "ok"
+
+        if validation_status == "failed":
+            return "error"
+
+        if validation_status == "skipped":
+            if template_key == "027-playlist_files" and validation_reason == "no_libraries":
+                return "unknown"
+            if validation_reason in QS_ERROR_REASONS:
+                return "error"
+            if group == "optional":
+                # Optional sections should remain neutral when users simply pass through
+                # or when validation is skipped due to missing optional inputs.
+                return "unknown"
+            if validation_reason in QS_WARN_REASONS:
+                return "warn"
+            return "warn" if group == "required" else ("warn" if user_entered else "ok")
+
+        if group == "required":
+            if not user_entered:
+                return "error"
+            if was_previously_validated:
+                return "error"
+            return "warn"
+
+        if not user_entered and not was_previously_validated and not validation_status:
+            return "unknown"
+        if was_previously_validated:
+            return "error"
+        return "warn" if user_entered else "ok"
+
+    if group == "required":
+        return "warn" if user_entered else "error"
+    if group == "optional":
+        return "warn" if user_entered else "unknown"
+    return "ok"
+
+
+def _build_workspace_status_context(config_name, template_list, available_configs=None):
+    template_keys = []
+    for file_entry, _ in template_list or []:
+        template_key = file_entry.rsplit(".", 1)[0]
+        template_keys.append(template_key)
+
+    section_rows = {}
+    if config_name:
+        try:
+            for row in database.retrieve_config_sections(config_name):
+                section_name = row.get("section")
+                if section_name:
+                    section_rows[section_name] = row
+        except Exception:
+            section_rows = {}
+
+    available_set = set(available_configs or [])
+    config_exists = bool(config_name) and (config_name in available_set or bool(section_rows))
+
+    required_seed = set(QS_REQUIRED_STEP_KEYS)
+    tautulli_requirement_reasons = _config_tautulli_dependency_reasons(section_rows) if QS_TAUTULLI_REQUIRED_STEP_KEY in template_keys else []
+    omdb_requirement_reasons = _config_omdb_dependency_reasons(section_rows) if QS_OMDB_REQUIRED_STEP_KEY in template_keys else []
+    mdblist_requirement_reasons = _config_mdblist_dependency_reasons(section_rows) if QS_MDBLIST_REQUIRED_STEP_KEY in template_keys else []
+    anidb_requirement_reasons = _config_anidb_dependency_reasons(section_rows) if QS_ANIDB_REQUIRED_STEP_KEY in template_keys else []
+    radarr_requirement_reasons = _config_radarr_dependency_reasons(section_rows) if QS_RADARR_REQUIRED_STEP_KEY in template_keys else []
+    sonarr_requirement_reasons = _config_sonarr_dependency_reasons(section_rows) if QS_SONARR_REQUIRED_STEP_KEY in template_keys else []
+    trakt_requirement_reasons = _config_trakt_dependency_reasons(section_rows) if QS_TRAKT_REQUIRED_STEP_KEY in template_keys else []
+    mal_requirement_reasons = _config_mal_dependency_reasons(section_rows) if QS_MAL_REQUIRED_STEP_KEY in template_keys else []
+    if QS_TAUTULLI_REQUIRED_STEP_KEY in template_keys and tautulli_requirement_reasons:
+        required_seed.add(QS_TAUTULLI_REQUIRED_STEP_KEY)
+    if QS_OMDB_REQUIRED_STEP_KEY in template_keys and omdb_requirement_reasons:
+        required_seed.add(QS_OMDB_REQUIRED_STEP_KEY)
+    if QS_MDBLIST_REQUIRED_STEP_KEY in template_keys and mdblist_requirement_reasons:
+        required_seed.add(QS_MDBLIST_REQUIRED_STEP_KEY)
+    if QS_ANIDB_REQUIRED_STEP_KEY in template_keys and anidb_requirement_reasons:
+        required_seed.add(QS_ANIDB_REQUIRED_STEP_KEY)
+    if QS_RADARR_REQUIRED_STEP_KEY in template_keys and radarr_requirement_reasons:
+        required_seed.add(QS_RADARR_REQUIRED_STEP_KEY)
+    if QS_SONARR_REQUIRED_STEP_KEY in template_keys and sonarr_requirement_reasons:
+        required_seed.add(QS_SONARR_REQUIRED_STEP_KEY)
+    if QS_TRAKT_REQUIRED_STEP_KEY in template_keys and trakt_requirement_reasons:
+        required_seed.add(QS_TRAKT_REQUIRED_STEP_KEY)
+    if QS_MAL_REQUIRED_STEP_KEY in template_keys and mal_requirement_reasons:
+        required_seed.add(QS_MAL_REQUIRED_STEP_KEY)
+    review_seed = set(QS_REVIEW_STEP_KEYS)
+
+    required_keys = [key for key in template_keys if key in required_seed]
+    review_keys = [key for key in template_keys if key in review_seed]
+    optional_keys = [key for key in template_keys if key not in required_seed and key not in review_seed]
+
+    step_statuses = {}
+    for template_key in template_keys:
+        if template_key == "900-final":
+            continue
+        if template_key in required_keys:
+            group = "required"
+        elif template_key in optional_keys:
+            group = "optional"
+        else:
+            group = "review"
+        step_statuses[template_key] = _derive_step_status(template_key, group, section_rows, config_exists)
+    if "900-final" in template_keys:
+        step_statuses["900-final"] = _derive_live_final_validation_status(step_statuses, template_keys)
+
+    required_rollup = _worst_status(step_statuses.get(key, "warn") for key in required_keys) if required_keys else "ok"
+    review_rollup = _worst_status(step_statuses.get(key, "ok") for key in review_keys) if review_keys else "ok"
+
+    optional_status_values = [step_statuses.get(key, "unknown") for key in optional_keys]
+    if not optional_status_values:
+        optional_rollup = "ok"
+    elif any(status == "error" for status in optional_status_values):
+        optional_rollup = "error"
+    elif any(status == "warn" for status in optional_status_values):
+        optional_rollup = "warn"
+    elif any(status == "unknown" for status in optional_status_values):
+        optional_rollup = "unknown"
+    else:
+        optional_rollup = "ok"
+
+    section_statuses = {
+        "required": required_rollup,
+        "optional": optional_rollup,
+        "review": review_rollup,
+    }
+
+    jump_to_validations = {}
+    for key in QS_VALIDATION_STEP_KEYS:
+        if key in step_statuses:
+            jump_to_validations[key] = step_statuses.get(key) == "ok"
+
+    required_total = len(required_keys)
+    required_ready = sum(1 for key in required_keys if step_statuses.get(key) == "ok")
+    required_percent = round((required_ready / required_total) * 100) if required_total else 0
+
+    optional_total = len(optional_keys)
+    optional_configured = sum(1 for key in optional_keys if step_statuses.get(key) != "unknown")
+    optional_issue_count = sum(1 for key in optional_keys if step_statuses.get(key) in {"warn", "error"})
+
+    optional_summary = f"Optional {optional_configured}/{optional_total} configured" if optional_total else "No optional pages"
+    if optional_issue_count > 0:
+        optional_summary += f" • {optional_issue_count} issue{'s' if optional_issue_count != 1 else ''}"
+
+    validation_timestamps = []
+    for row in section_rows.values():
+        if not isinstance(row, dict):
+            continue
+        data = row.get("data")
+        if not isinstance(data, dict):
+            continue
+        for key in ("validation_updated_at", "validated_at"):
+            value = data.get(key)
+            if value:
+                validation_timestamps.append(value)
+        if row.get("section") == "validation_summary":
+            summary_updated = data.get("updated_at")
+            if summary_updated:
+                validation_timestamps.append(summary_updated)
+    latest_validation_at = _latest_iso_timestamp(validation_timestamps)
+    validation_age_label, validation_freshness = _format_validation_age(latest_validation_at)
+
+    readiness = {
+        "required_total": required_total,
+        "required_ready": required_ready,
+        "required_percent": required_percent,
+        "required_state": required_rollup,
+        "optional_total": optional_total,
+        "optional_configured": optional_configured,
+        "optional_issue_count": optional_issue_count,
+        "optional_summary": optional_summary,
+        "latest_validation_at": latest_validation_at,
+        "validation_age_label": validation_age_label,
+        "validation_freshness": validation_freshness,
+    }
+
+    return {
+        "step_statuses": step_statuses,
+        "section_statuses": section_statuses,
+        "jump_to_validations": jump_to_validations,
+        "required_keys": required_keys,
+        "optional_keys": optional_keys,
+        "review_keys": review_keys,
+        "tautulli_requirement_reasons": tautulli_requirement_reasons,
+        "omdb_requirement_reasons": omdb_requirement_reasons,
+        "mdblist_requirement_reasons": mdblist_requirement_reasons,
+        "anidb_requirement_reasons": anidb_requirement_reasons,
+        "radarr_requirement_reasons": radarr_requirement_reasons,
+        "sonarr_requirement_reasons": sonarr_requirement_reasons,
+        "trakt_requirement_reasons": trakt_requirement_reasons,
+        "mal_requirement_reasons": mal_requirement_reasons,
+        "readiness": readiness,
+    }
 
 
 def _calculate_process_cpu_percent(proc):
@@ -896,6 +2043,12 @@ BUILTIN_PREVIEW_IMAGES = (
     "overlay_alignment_guide.png",
     "overlay_alignment_guide_episodes.png",
 )
+BUILTIN_PREVIEW_IMAGES_BY_TYPE = {
+    "movie": ("overlay_alignment_guide.png",),
+    "show": ("overlay_alignment_guide.png",),
+    "season": ("overlay_alignment_guide.png",),
+    "episode": ("overlay_alignment_guide_episodes.png",),
+}
 PREVIEW_FOLDER = os.path.join(helpers.CONFIG_DIR, "previews")
 os.makedirs(PREVIEW_FOLDER, exist_ok=True)
 OVERLAY_CACHE_FOLDER = os.path.join(helpers.CONFIG_DIR, "cache", "overlays")
@@ -906,7 +2059,8 @@ _FONT_CACHE: list[str] = []
 
 def _list_preview_images_for_type(image_type: str) -> list[str]:
     """Return built-in guide images plus uploaded images for a preview image type."""
-    builtins = [name for name in BUILTIN_PREVIEW_IMAGES if os.path.exists(os.path.join(IMAGES_FOLDER, name))]
+    builtin_candidates = BUILTIN_PREVIEW_IMAGES_BY_TYPE.get(image_type, ())
+    builtins = [name for name in builtin_candidates if os.path.exists(os.path.join(IMAGES_FOLDER, name))]
     uploads_dir = UPLOAD_FOLDERS.get(image_type)
     uploads: list[str] = []
     if uploads_dir and os.path.exists(uploads_dir):
@@ -923,6 +2077,9 @@ def _build_preview_image_data() -> dict[str, list[str]]:
 
 def _resolve_preview_base_image_path(img_type: str, selected_image: str) -> str:
     if not selected_image or selected_image == "default":
+        return DEFAULT_IMAGE_MAP.get(img_type, DEFAULT_IMAGE_MAP["movie"])
+
+    if selected_image in BUILTIN_PREVIEW_IMAGES and selected_image not in BUILTIN_PREVIEW_IMAGES_BY_TYPE.get(img_type, ()):
         return DEFAULT_IMAGE_MAP.get(img_type, DEFAULT_IMAGE_MAP["movie"])
 
     static_candidate = _safe_join(IMAGES_FOLDER, selected_image)
@@ -991,7 +2148,7 @@ threading.Thread(target=start_update_thread, daemon=True).start()
 def inject_version_info():
     """Ensure latest version info is injected dynamically in templates"""
     return {
-        "version_info": helpers.check_for_update(),
+        "version_info": app.config.get("VERSION_CHECK") or {},
         "overlay_fonts": list_overlay_fonts(),
     }
 
@@ -1159,6 +2316,26 @@ def update_quickstart():
         helpers.ts_log(f"Quickstart update failed: {e}", level="ERROR")
         logs.append("Exception during Quickstart update.")
         return jsonify({"success": False, "log": logs}), 500
+
+
+@app.route("/check-quickstart-update", methods=["POST"])
+def check_quickstart_update():
+    try:
+        version_info = helpers.check_for_update()
+        app.config["VERSION_CHECK"] = version_info
+        return jsonify({"success": True, "version_info": version_info})
+    except Exception as e:
+        helpers.ts_log(f"Quickstart update check failed: {e}", level="ERROR")
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "Failed to check for Quickstart updates.",
+                    "version_info": app.config.get("VERSION_CHECK") or {},
+                }
+            ),
+            500,
+        )
 
 
 # Initialize Flask-Session
@@ -1780,7 +2957,41 @@ def switch_config():
         return jsonify(success=False, message="Config not found."), 404
 
     session["config_name"] = name
-    return jsonify(success=True, name=name)
+    try:
+        menu_templates = helpers.get_menu_list()
+        workspace_status = _build_workspace_status_context(name, menu_templates, available_configs=available)
+    except Exception:
+        workspace_status = {}
+    return jsonify(success=True, name=name, workspace_status=workspace_status)
+
+
+@app.route("/activate-config", methods=["POST"])
+def activate_config():
+    data = request.get_json(silent=True) or {}
+    requested_name = data.get("name")
+    name = _sanitize_config_name(requested_name)
+    if not name:
+        return jsonify(success=False, message="Config name is required."), 400
+
+    available = database.get_unique_config_names() or []
+    created = name not in available
+
+    session["config_name"] = name
+
+    if created:
+        seed_payload = {
+            "start": {"config_name": name},
+            "validated_at": utc_now_iso(),
+        }
+        database.save_section_data(
+            name=name,
+            section="start",
+            validated=True,
+            user_entered=True,
+            data=seed_payload,
+        )
+
+    return jsonify(success=True, name=name, created=created)
 
 
 @app.route("/bulk-delete-configs", methods=["POST"])
@@ -2791,9 +4002,15 @@ def import_config_confirm():
             selected_sections = {section for section in merge_sections if section in importable_sections}
         else:
             selected_sections = set(importable_sections)
+        if "playlist_files" in selected_sections:
+            selected_sections.discard("playlist_files")
+            selected_sections.add("libraries")
         if not selected_sections:
             return jsonify(success=False, message="Select at least one section to merge."), 400
-        config_data = {key: value for key, value in config_data.items() if key in selected_sections}
+        selected_config_sections = set(selected_sections)
+        if "libraries" in selected_config_sections:
+            selected_config_sections.add("playlist_files")
+        config_data = {key: value for key, value in config_data.items() if key in selected_config_sections}
     if not config_name:
         return jsonify(success=False, message="Import payload is invalid."), 400
 
@@ -3065,11 +4282,22 @@ def import_config_confirm():
     session.pop("import_preview_plex_token", None)
     session.pop("import_preview_tmdb_apikey", None)
     session["config_name"] = config_name
+    importable_sections = sorted(str(section) for section in (cached.get("importable_sections") or payload.keys()))
+    skipped_sections = sorted(section for section in importable_sections if section not in set(imported_sections))
+    report_summary = report.summary() if "report" in locals() else (cached.get("report_summary") or {})
+    mapping_values = [str(value).strip() for value in library_mapping.values()] if isinstance(library_mapping, dict) else []
+    mapping_summary = {
+        "mapped": sum(1 for value in mapping_values if value and value != "__ignore__"),
+        "ignored": sum(1 for value in mapping_values if value == "__ignore__"),
+    }
 
     return jsonify(
         success=True,
         config_name=config_name,
         imported_sections=imported_sections,
+        skipped_sections=skipped_sections,
+        report_summary=report_summary,
+        mapping_summary=mapping_summary,
         fonts_copied=fonts_copied,
         fonts_skipped=fonts_skipped,
         fonts_skipped_existing=fonts_skipped_existing,
@@ -3083,6 +4311,16 @@ def step(name):
     header_style = "single_line"  # Default to 'single_line' font
     save_error = None
     persistence.ensure_session_config_name()
+    previous_config = session.get("config_name")
+
+    posted_config = request.form.get("configSelector")
+    posted_new_config_name = request.form.get("newConfigName")
+    if posted_config == "add_config" and posted_new_config_name:
+        posted_config = posted_new_config_name.strip()
+
+    # Ensure saves happen against the currently selected config.
+    if request.method == "POST" and posted_config:
+        session["config_name"] = posted_config
 
     if request.method == "POST":
         path_errors = path_validation.validate_payload(request.form)
@@ -3095,7 +4333,6 @@ def step(name):
             header_style = request.form.get("header_style", "single_line")
 
     # --- Detect config change ---
-    previous_config = session.get("config_name")
     selected_config = request.form.get("configSelector") or previous_config
     new_config_name = request.form.get("newConfigName")
 
@@ -3234,8 +4471,8 @@ def step(name):
     if "kometa_root" not in session:
         session["kometa_root"] = app.config.get("KOMETA_ROOT", "")
 
-    # Fetch Plex settings
-    all_libraries = persistence.retrieve_settings("010-plex")
+    # Fetch Plex settings (reuse already loaded payload on Plex step)
+    all_libraries = data if name == "010-plex" else persistence.retrieve_settings("010-plex")
 
     # Ensure 'plex' key exists before accessing sub-keys
     plex_data = all_libraries.get("plex", {})
@@ -3248,7 +4485,8 @@ def step(name):
     else:
         has_cached_user_list = False
 
-    plex_url, plex_token = persistence.get_stored_plex_credentials("010-plex")
+    plex_url = plex_data.get("url")
+    plex_token = plex_data.get("token")
     dummy_plex = persistence.get_dummy_data("plex") or {}
     has_plex_credentials = bool(
         plex_url and plex_token and str(plex_url).strip() != str(dummy_plex.get("url", "")).strip() and str(plex_token).strip() != str(dummy_plex.get("token", "")).strip()
@@ -3264,16 +4502,20 @@ def step(name):
             refresh_plex_libraries()
             all_libraries = persistence.retrieve_settings("010-plex")
             plex_data = all_libraries.get("plex", {})
-        telemetry = persistence.retrieve_settings("plex_telemetry")
-    else:
-        telemetry = persistence.retrieve_settings("plex_telemetry")
 
-    telemetry_data = telemetry.get("plex_telemetry")
+    telemetry_payload = {}
+    try:
+        telemetry_section = database.retrieve_section_data(name=selected_config, section="plex_telemetry")
+        if telemetry_section and isinstance(telemetry_section[2], dict):
+            telemetry_payload = telemetry_section[2].get("plex_telemetry", {}) or {}
+    except Exception:
+        telemetry_payload = {}
+    telemetry = {"plex_telemetry": telemetry_payload}
 
     # If telemetry is fresher in plex_data, use that
     telemetry_data = plex_data.get("telemetry")
     if not isinstance(telemetry_data, dict) or "plex_pass" not in telemetry_data:
-        telemetry_data = telemetry.get("plex_telemetry", {})
+        telemetry_data = telemetry_payload
 
         # Fallback if DB is also missing it
         if not isinstance(telemetry_data, dict) or "plex_pass" not in telemetry_data:
@@ -3383,14 +4625,15 @@ def step(name):
 
     start_time = time.perf_counter()
 
-    helpers.ts_log(f"Loading attribute_config...", level="TIMING")
-    attribute_config = helpers.load_quickstart_config("quickstart_attributes.json")
-    helpers.ts_log(f"Loading collection_config...", level="TIMING")
-    collection_config = helpers.load_quickstart_config("quickstart_collections.json")
-    helpers.ts_log(f"Loading overlay_config...", level="TIMING")
-    overlay_config = helpers.load_quickstart_config("quickstart_overlays.json")
+    needs_library_payload = name == "025-libraries"
+    attribute_config = {}
+    collection_config = []
+    overlay_config = []
+    service_validations = {}
+    overlay_fonts = []
+    image_data = {}
 
-    def add_offset_vars(config):
+    def add_offset_vars(config):  # noqa: ANN001
         """
         Ensure each overlay exposes positional offsets with sensible defaults.
         """
@@ -3430,115 +4673,139 @@ def step(name):
                     },
                 )
 
-    add_offset_vars(overlay_config)
+    if needs_library_payload:
+        helpers.ts_log(f"Loading attribute_config...", level="TIMING")
+        attribute_config = helpers.load_quickstart_config("quickstart_attributes.json")
+        helpers.ts_log(f"Loading collection_config...", level="TIMING")
+        collection_config = helpers.load_quickstart_config("quickstart_collections.json")
+        helpers.ts_log(f"Loading overlay_config...", level="TIMING")
+        overlay_config = helpers.load_quickstart_config("quickstart_overlays.json")
+        add_offset_vars(overlay_config)
+        helpers.ts_log(f"Loading preview image data...", level="TIMING")
+        image_data = _build_preview_image_data()
+        overlay_fonts = list_overlay_fonts()
 
-    service_validation_sources = [
-        ("010-plex", "plex"),
-        ("020-tmdb", "tmdb"),
-        ("050-omdb", "omdb"),
-        ("060-mdblist", "mdblist"),
-        ("100-anidb", "anidb"),
-        ("130-trakt", "trakt"),
-        ("140-mal", "mal"),
-    ]
-    validation_pages = {
-        "010-plex",
-        "020-tmdb",
-        "025-libraries",
-        "027-playlist_files",
-        "030-tautulli",
-        "040-github",
-        "050-omdb",
-        "060-mdblist",
-        "070-notifiarr",
-        "080-gotify",
-        "085-ntfy",
-        "090-webhooks",
-        "100-anidb",
-        "110-radarr",
-        "120-sonarr",
-        "130-trakt",
-        "140-mal",
-        "150-settings",
-    }
-    service_validations = {}
-    for section, key in service_validation_sources:
-        settings = persistence.retrieve_settings(section)
-        service_validations[key] = helpers.booler(settings.get("validated", False))
-    validation_sections = {key: key.split("-", 1)[1] for key in validation_pages}
-    validated_sections = database.retrieve_validated_map(config_name, list(validation_sections.values()))
-    jump_to_validations = {key: validated_sections.get(section, False) for key, section in validation_sections.items()}
+        service_validation_sources = [
+            ("010-plex", "plex"),
+            ("020-tmdb", "tmdb"),
+            ("050-omdb", "omdb"),
+            ("060-mdblist", "mdblist"),
+            ("100-anidb", "anidb"),
+            ("130-trakt", "trakt"),
+            ("140-mal", "mal"),
+        ]
+        for section, key in service_validation_sources:
+            settings = persistence.retrieve_settings(section)
+            service_validations[key] = helpers.booler(settings.get("validated", False))
+    workspace_status = _build_workspace_status_context(config_name, file_list, available_configs=available_configs)
+    jump_to_validations = workspace_status.get("jump_to_validations", {})
+    step_statuses = workspace_status.get("step_statuses", {})
+    section_statuses = workspace_status.get("section_statuses", {})
 
     if name == "900-final":
         validation_meta = []
-        for file, display_name in file_list:
-            template_key = file.rsplit(".", 1)[0]
-            settings = persistence.retrieve_settings(template_key)
-            has_validation = template_key in validation_pages
-            validation_status = None
-            validation_reason = None
-            validation_details = None
-            if has_validation:
-                section_name = template_key.split("-", 1)[1]
-                stored_section = database.retrieve_section_data(config_name, section_name)
-                stored_payload = stored_section[2] if stored_section else None
-                if isinstance(stored_payload, dict):
-                    validation_status = stored_payload.get("validation_status")
-                    validation_reason = stored_payload.get("validation_reason")
-                    validation_details = stored_payload.get("validation_details")
-            if not validation_status and has_validation:
-                if helpers.booler(settings.get("validated", False)):
-                    validation_status = "validated"
-                elif settings.get("validated_at"):
-                    validation_status = "failed"
-
-            validation_result = ""
-            if validation_status:
-                label = validation_status.capitalize()
-                if validation_reason:
-                    pretty = VALIDATION_REASON_LABELS.get(validation_reason, validation_reason.replace("_", " "))
-                    detail_text = ""
-                    if isinstance(validation_details, (list, tuple)):
-                        detail_text = ", ".join(str(item) for item in validation_details if str(item))
-                    elif validation_details is not None:
-                        detail_text = str(validation_details)
-                    if detail_text:
-                        validation_result = f"{label}: {pretty}: {detail_text}"
-                    else:
-                        validation_result = f"{label}: {pretty}"
-                else:
-                    validation_result = label
-
-            validation_meta.append(
-                {
-                    "key": template_key,
-                    "label": display_name,
-                    "page": template_key,
-                    "has_validation": has_validation,
-                    "validated": helpers.booler(settings.get("validated", False)) if has_validation else None,
-                    "validated_at": settings.get("validated_at", "") if has_validation else "",
-                    "validation_result": validation_result,
-                }
-            )
-        validated, validation_error, config_data, yaml_content, validation_errors = output.build_config(header_style, config_name=config_name)
-        validation_summary = build_validation_summary(validation_errors)
-        validation_rollup = None
-        validation_rollup_at = None
+        validation_bulk_rollup = None
+        validation_bulk_rollup_at = None
         try:
             stored_validation = database.retrieve_section_data(config_name, "validation_summary")
             stored_payload = stored_validation[2] if stored_validation else None
             if isinstance(stored_payload, dict):
-                validation_rollup = stored_payload.get("summary_text")
-                validation_rollup_at = stored_payload.get("updated_at")
+                validation_bulk_rollup = stored_payload.get("summary_text")
+                validation_bulk_rollup_at = stored_payload.get("updated_at")
         except Exception:
-            validation_rollup = None
-            validation_rollup_at = None
-        used_fonts = helpers.collect_font_references(config_data)
-        saved_filename = helpers.save_to_named_config(yaml_content, config_name, used_fonts)
+            validation_bulk_rollup = None
+            validation_bulk_rollup_at = None
+
+        final_gate = _build_final_gate(workspace_status, file_list, validation_bulk_rollup_at)
+        template_keys_for_rollup = [file.rsplit(".", 1)[0] for file, _ in file_list]
+        validation_rollup = None
+        validation_rollup_summary = {}
+        validation_rollup_state = "unknown"
+        validation_rollup_at = None
+        if final_gate.get("stage") != "todo":
+            for file, display_name in file_list:
+                template_key = file.rsplit(".", 1)[0]
+                settings = persistence.retrieve_settings(template_key)
+                has_validation = template_key in QS_VALIDATION_STEP_KEYS
+                validation_status = None
+                validation_reason = None
+                validation_details = None
+                validation_updated_at = None
+                if has_validation:
+                    section_name = template_key.split("-", 1)[1]
+                    stored_section = database.retrieve_section_data(config_name, section_name)
+                    stored_payload = stored_section[2] if stored_section else None
+                    if isinstance(stored_payload, dict):
+                        validation_status = stored_payload.get("validation_status")
+                        validation_reason = stored_payload.get("validation_reason")
+                        validation_details = stored_payload.get("validation_details")
+                        validation_updated_at = stored_payload.get("validation_updated_at")
+                if not validation_status and has_validation:
+                    if helpers.booler(settings.get("validated", False)):
+                        validation_status = "validated"
+                    elif settings.get("validated_at"):
+                        validation_status = "failed"
+                if not validation_updated_at and has_validation:
+                    validation_updated_at = settings.get("validated_at")
+
+                validation_result = ""
+                if validation_status:
+                    label = validation_status.capitalize()
+                    if validation_reason:
+                        pretty = VALIDATION_REASON_LABELS.get(validation_reason, validation_reason.replace("_", " "))
+                        detail_text = ""
+                        if isinstance(validation_details, (list, tuple)):
+                            detail_text = ", ".join(str(item) for item in validation_details if str(item))
+                        elif validation_details is not None:
+                            detail_text = str(validation_details)
+                        if detail_text:
+                            validation_result = f"{label}: {pretty}: {detail_text}"
+                        else:
+                            validation_result = f"{label}: {pretty}"
+                    else:
+                        validation_result = label
+
+                validation_meta.append(
+                    {
+                        "key": template_key,
+                        "label": display_name,
+                        "page": template_key,
+                        "has_validation": has_validation,
+                        "validated": helpers.booler(settings.get("validated", False)) if has_validation else None,
+                        "validated_at": settings.get("validated_at", "") if has_validation else "",
+                        "validation_updated_at": validation_updated_at if has_validation else "",
+                        "validation_result": validation_result,
+                    }
+                )
+            live_rollup = _build_live_validation_rollup(step_statuses, template_keys_for_rollup)
+            validation_rollup = live_rollup.get("summary_text")
+            validation_rollup_summary = live_rollup.get("counts", {})
+            validation_rollup_state = live_rollup.get("state", "unknown")
+            validation_rollup_at = _latest_iso_timestamp([entry.get("validation_updated_at") for entry in validation_meta])
+        validated = False
+        validation_error = None
+        config_data = {}
+        yaml_content = ""
+        validation_errors = []
+        validation_summary = []
+        saved_filename = ""
+
+        if final_gate.get("can_build_config"):
+            validated, validation_error, config_data, yaml_content, validation_errors = output.build_config(header_style, config_name=config_name)
+            validation_summary = build_validation_summary(validation_errors)
+            used_fonts = helpers.collect_font_references(config_data)
+            saved_filename = helpers.save_to_named_config(yaml_content, config_name, used_fonts)
+            final_gate["config_valid"] = bool(validated)
+            final_gate["stage"] = "kometa" if validated else "config"
+        elif final_gate.get("stage") == "freshness":
+            validation_rollup_state = "warn"
+            if not validation_bulk_rollup:
+                validation_bulk_rollup = f"Validation is stale. Bulk validation has not run in the last {QS_FINAL_VALIDATION_TTL_HOURS} hours."
         page_info["saved_filename"] = saved_filename
         page_info["yaml_valid"] = validated
         page_info["quickstart_root"] = helpers.get_app_root()
-        incomplete_resume_hint = _build_latest_incomplete_resume_hint()
+        kometa_is_running = helpers.is_kometa_running()
+        incomplete_resume_hint = None if kometa_is_running else _build_latest_incomplete_resume_hint()
         session["yaml_content"] = yaml_content
         library_settings = persistence.retrieve_settings("025-libraries").get("libraries", {})
         movie_libraries = []
@@ -3571,16 +4838,35 @@ def step(name):
             validation_summary=validation_summary,
             validation_rollup=validation_rollup,
             validation_rollup_at=validation_rollup_at,
+            validation_rollup_summary=validation_rollup_summary,
+            validation_rollup_state=validation_rollup_state,
+            validation_bulk_rollup=validation_bulk_rollup,
+            validation_bulk_rollup_at=validation_bulk_rollup_at,
             template_list=file_list,
             available_configs=available_configs,
             movie_libraries=movie_libraries,
             show_libraries=show_libraries,
             library_dropdown=library_dropdown,
             config_dir=str(Path(helpers.CONFIG_DIR).resolve()),
-            overlay_fonts=list_overlay_fonts(),
+            overlay_fonts=overlay_fonts,
             service_validations=service_validations,
             validation_meta=validation_meta,
             jump_to_validations=jump_to_validations,
+            step_statuses=step_statuses,
+            section_statuses=section_statuses,
+            required_keys=workspace_status.get("required_keys", []),
+            optional_keys=workspace_status.get("optional_keys", []),
+            review_keys=workspace_status.get("review_keys", []),
+            tautulli_requirement_reasons=workspace_status.get("tautulli_requirement_reasons", []),
+            omdb_requirement_reasons=workspace_status.get("omdb_requirement_reasons", []),
+            mdblist_requirement_reasons=workspace_status.get("mdblist_requirement_reasons", []),
+            anidb_requirement_reasons=workspace_status.get("anidb_requirement_reasons", []),
+            radarr_requirement_reasons=workspace_status.get("radarr_requirement_reasons", []),
+            sonarr_requirement_reasons=workspace_status.get("sonarr_requirement_reasons", []),
+            trakt_requirement_reasons=workspace_status.get("trakt_requirement_reasons", []),
+            mal_requirement_reasons=workspace_status.get("mal_requirement_reasons", []),
+            workspace_readiness=workspace_status.get("readiness", {}),
+            final_gate=final_gate,
             incomplete_resume_hint=incomplete_resume_hint,
         )
 
@@ -3612,10 +4898,24 @@ def step(name):
         overlay_config=overlay_config,
         template_list=file_list,
         available_configs=available_configs,
-        overlay_fonts=list_overlay_fonts(),
+        overlay_fonts=overlay_fonts,
         service_validations=service_validations,
         jump_to_validations=jump_to_validations,
-        image_data=_build_preview_image_data(),
+        step_statuses=step_statuses,
+        section_statuses=section_statuses,
+        required_keys=workspace_status.get("required_keys", []),
+        optional_keys=workspace_status.get("optional_keys", []),
+        review_keys=workspace_status.get("review_keys", []),
+        tautulli_requirement_reasons=workspace_status.get("tautulli_requirement_reasons", []),
+        omdb_requirement_reasons=workspace_status.get("omdb_requirement_reasons", []),
+        mdblist_requirement_reasons=workspace_status.get("mdblist_requirement_reasons", []),
+        anidb_requirement_reasons=workspace_status.get("anidb_requirement_reasons", []),
+        radarr_requirement_reasons=workspace_status.get("radarr_requirement_reasons", []),
+        sonarr_requirement_reasons=workspace_status.get("sonarr_requirement_reasons", []),
+        trakt_requirement_reasons=workspace_status.get("trakt_requirement_reasons", []),
+        mal_requirement_reasons=workspace_status.get("mal_requirement_reasons", []),
+        workspace_readiness=workspace_status.get("readiness", {}),
+        image_data=image_data,
         config_dir=str(Path(helpers.CONFIG_DIR).resolve()),
         configured_ids=configured_ids,
         configured_counts=configured_counts,
@@ -3625,6 +4925,34 @@ def step(name):
     if app.config["QS_DEBUG"]:
         helpers.ts_log(f"Rendered {name}.html in {end_time - start_time:.2f} seconds", level="PROFILE")
     return html
+
+
+@app.route("/workspace_status", methods=["GET"])
+def workspace_status():
+    """Return live workspace step/group/readiness state for sidebar updates."""
+    persistence.ensure_session_config_name()
+    config_name = request.args.get("config_name") or session.get("config_name")
+    available_configs = database.get_unique_config_names() or []
+    menu_templates = helpers.get_menu_list()
+    status = _build_workspace_status_context(config_name, menu_templates, available_configs=available_configs)
+    return jsonify(
+        success=True,
+        config_name=config_name,
+        step_statuses=status.get("step_statuses", {}),
+        section_statuses=status.get("section_statuses", {}),
+        required_keys=status.get("required_keys", []),
+        optional_keys=status.get("optional_keys", []),
+        review_keys=status.get("review_keys", []),
+        tautulli_requirement_reasons=status.get("tautulli_requirement_reasons", []),
+        omdb_requirement_reasons=status.get("omdb_requirement_reasons", []),
+        mdblist_requirement_reasons=status.get("mdblist_requirement_reasons", []),
+        anidb_requirement_reasons=status.get("anidb_requirement_reasons", []),
+        radarr_requirement_reasons=status.get("radarr_requirement_reasons", []),
+        sonarr_requirement_reasons=status.get("sonarr_requirement_reasons", []),
+        trakt_requirement_reasons=status.get("trakt_requirement_reasons", []),
+        mal_requirement_reasons=status.get("mal_requirement_reasons", []),
+        readiness=status.get("readiness", {}),
+    )
 
 
 @app.route("/get_top_imdb_items/<library_name>")
@@ -3700,6 +5028,69 @@ def _build_library_lists():
     return movie_libraries, show_libraries, telemetry_data
 
 
+def _legacy_playlist_library_names():
+    settings = persistence.retrieve_settings("027-playlist_files") or {}
+    playlist_payload = settings.get("playlist_files", {}) if isinstance(settings, dict) else {}
+    if isinstance(playlist_payload, dict) and isinstance(playlist_payload.get("playlist_files"), dict):
+        playlist_payload = playlist_payload.get("playlist_files", {})
+    raw_libraries = playlist_payload.get("libraries", "") if isinstance(playlist_payload, dict) else ""
+    if isinstance(raw_libraries, list):
+        return {str(item).strip() for item in raw_libraries if str(item).strip()}
+    return {item.strip() for item in str(raw_libraries or "").split(",") if item.strip()}
+
+
+def _migrate_legacy_playlist_libraries_to_library_toggles(movie_libraries=None, show_libraries=None):
+    legacy_names = _legacy_playlist_library_names()
+    if not legacy_names:
+        return set()
+
+    settings = persistence.retrieve_settings("025-libraries") or {}
+    libraries_data = settings.get("libraries", {}) if isinstance(settings, dict) else {}
+    if not isinstance(libraries_data, dict):
+        return legacy_names
+
+    if any(isinstance(key, str) and key.endswith("-playlist") for key in libraries_data):
+        return set()
+
+    if movie_libraries is None or show_libraries is None:
+        movie_libraries, show_libraries, _telemetry = _build_library_lists()
+
+    migrated = {}
+    for library in list(movie_libraries or []) + list(show_libraries or []):
+        library_id = library.get("id")
+        library_name = library.get("name")
+        if not library_id or not library_name:
+            continue
+        if library_name not in legacy_names:
+            continue
+        if not _is_truthy_setting_value(libraries_data.get(f"{library_id}-library")):
+            continue
+        migrated[f"{library_id}-playlist"] = "true"
+
+    if not migrated:
+        return legacy_names
+
+    updated_libraries = libraries_data.copy()
+    updated_libraries.update(migrated)
+    settings["libraries"] = updated_libraries
+    config_name = session.get("config_name")
+    if not config_name:
+        return legacy_names
+    try:
+        database.save_section_data(
+            name=config_name,
+            section="libraries",
+            validated=helpers.booler(settings.get("validated", False)),
+            user_entered=True,
+            data=settings,
+        )
+    except Exception as e:
+        helpers.ts_log(f"Failed to migrate legacy playlist libraries: {e}", level="ERROR")
+        return legacy_names
+
+    return legacy_names
+
+
 @app.route("/library_fragment/<library_id>")
 def library_fragment(library_id):
     """Return a single library form fragment so we can lazy-load library settings on the page."""
@@ -3714,6 +5105,7 @@ def library_fragment(library_id):
     collection_config = helpers.load_quickstart_config("quickstart_collections.json")
     overlay_config = helpers.load_quickstart_config("quickstart_overlays.json")
 
+    legacy_playlist_libraries = _migrate_legacy_playlist_libraries_to_library_toggles(movie_libraries, show_libraries)
     data = persistence.retrieve_settings("025-libraries")
     configured_ids = _configured_library_ids(data.get("libraries", {}))
 
@@ -3732,6 +5124,7 @@ def library_fragment(library_id):
         image_data=image_data,
         movie_images=image_data["movie"],
         configured_ids=configured_ids,
+        legacy_playlist_libraries=legacy_playlist_libraries,
     )
 
     return html
@@ -3750,6 +5143,139 @@ def autosave_library(library_id):
     except Exception as e:
         helpers.ts_log(f"Autosave failed for library {library_id}: {e}", level="ERROR")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _build_merged_libraries_hint_payload(payload):
+    source_library_id = str(payload.get("source_library_id") or "").strip()
+    source_payload = payload.get("source_payload") if isinstance(payload.get("source_payload"), dict) else {}
+
+    settings = persistence.retrieve_settings("025-libraries")
+    libraries_data = settings.get("libraries", {}) if isinstance(settings, dict) else {}
+    merged = libraries_data.copy() if isinstance(libraries_data, dict) else {}
+
+    if not source_payload:
+        return merged
+
+    clean_payload = persistence.clean_form_data(MultiDict(source_payload))
+    incoming_dict = helpers.build_config_dict("libraries", clean_payload).get("libraries", {})
+    incoming_dict = incoming_dict if isinstance(incoming_dict, dict) else {}
+
+    prefixes = set()
+    if source_library_id:
+        source_prefix = source_library_id.split("-card-container")[0] if source_library_id.endswith("-card-container") else source_library_id
+        if source_prefix:
+            prefixes.add(source_prefix)
+
+    for key in incoming_dict:
+        prefix = _library_prefix_from_key(key)
+        if prefix:
+            prefixes.add(prefix)
+
+    for prefix in prefixes:
+        for existing_key in list(merged.keys()):
+            if existing_key == f"{prefix}-library" or existing_key.startswith(prefix + "-"):
+                merged.pop(existing_key, None)
+
+    for key, value in incoming_dict.items():
+        if (key.endswith("-library") or key.endswith("-playlist")) and not _is_truthy_setting_value(value):
+            continue
+        merged[key] = value
+
+    return merged
+
+
+def _libraries_dependency_hint_response(payload, resolver):
+    merged = _build_merged_libraries_hint_payload(payload)
+    reasons = resolver(merged)
+    return jsonify({"success": True, "required": bool(reasons), "reasons": reasons})
+
+
+@app.route("/libraries_tautulli_dependency_hint", methods=["POST"])
+def libraries_tautulli_dependency_hint():
+    """Preview Tautulli-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_tautulli_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build Tautulli dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
+
+
+@app.route("/libraries_omdb_dependency_hint", methods=["POST"])
+def libraries_omdb_dependency_hint():
+    """Preview OMDb-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_omdb_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build OMDb dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
+
+
+@app.route("/libraries_mdblist_dependency_hint", methods=["POST"])
+def libraries_mdblist_dependency_hint():
+    """Preview MDBList-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_mdblist_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build MDBList dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
+
+
+@app.route("/libraries_anidb_dependency_hint", methods=["POST"])
+def libraries_anidb_dependency_hint():
+    """Preview AniDB-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_anidb_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build AniDB dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
+
+
+@app.route("/libraries_radarr_dependency_hint", methods=["POST"])
+def libraries_radarr_dependency_hint():
+    """Preview Radarr-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_radarr_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build Radarr dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
+
+
+@app.route("/libraries_sonarr_dependency_hint", methods=["POST"])
+def libraries_sonarr_dependency_hint():
+    """Preview Sonarr-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_sonarr_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build Sonarr dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
+
+
+@app.route("/libraries_trakt_dependency_hint", methods=["POST"])
+def libraries_trakt_dependency_hint():
+    """Preview Trakt-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_trakt_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build Trakt dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
+
+
+@app.route("/libraries_mal_dependency_hint", methods=["POST"])
+def libraries_mal_dependency_hint():
+    """Preview MAL-required dependency reasons using current in-page library edits."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        return _libraries_dependency_hint_response(payload, _libraries_data_mal_dependency_reasons)
+    except Exception as e:
+        helpers.ts_log(f"Failed to build MAL dependency hint: {e}", level="ERROR")
+        return jsonify({"success": False, "required": False, "reasons": [], "error": str(e)}), 500
 
 
 @app.route("/copy_library_settings", methods=["POST"])
@@ -4136,6 +5662,32 @@ def refresh_plex_libraries():
                 400,
             )
 
+        cached_refresh = helpers.get_cached_plex_refresh(plex_url, plex_token)
+        if cached_refresh:
+            helpers.ts_log("Using cached Plex library refresh payload.", level="DEBUG")
+            persistence.update_stored_plex_libraries(
+                "010-plex",
+                cached_refresh.get("movie_libraries", []),
+                cached_refresh.get("show_libraries", []),
+                cached_refresh.get("music_libraries", []),
+                cached_refresh.get("user_list", []),
+            )
+            cached_telemetry = {
+                key: value
+                for key, value in cached_refresh.items()
+                if key
+                not in {
+                    "validated",
+                    "user_list",
+                    "music_libraries",
+                    "movie_libraries",
+                    "show_libraries",
+                    "has_plex_pass",
+                }
+            }
+            persistence.save_settings("plex_telemetry", cached_telemetry)
+            return jsonify(cached_refresh)
+
         # Validate Plex server and get updated libraries
         plex_response = validations.validate_plex_server({"plex_url": plex_url, "plex_token": plex_token})
         plex_data = plex_response.get_json() if isinstance(plex_response, Flask.response_class) else plex_response
@@ -4153,11 +5705,12 @@ def refresh_plex_libraries():
         )
 
         # Get fresh telemetry using helpers and store it
-        telemetry = helpers.get_plex_metadata()
+        telemetry = helpers.get_plex_metadata(plex_url=plex_url, plex_token=plex_token)
         persistence.save_settings("plex_telemetry", telemetry)
 
         # Merge both plex_data and telemetry for response
         merged_response = {**plex_data, **telemetry}
+        helpers.set_cached_plex_refresh(plex_url, plex_token, merged_response)
 
         return jsonify(merged_response)
 
@@ -4701,7 +6254,6 @@ def validate_all_services():
     plex_is_valid = helpers.booler(plex_settings.get("validated", False)) if isinstance(plex_settings, dict) else False
     if not plex_is_valid:
         skip_section_validation("025-libraries", "libraries", reason="missing_plex_validation")
-        skip_section_validation("027-playlist_files", "playlist_files", reason="missing_plex_validation")
     else:
         libraries_settings = persistence.retrieve_settings("025-libraries") or {}
         libraries_data = libraries_settings.get("libraries", {}) if isinstance(libraries_settings, dict) else {}
@@ -4719,6 +6271,29 @@ def validate_all_services():
             if path_errors:
                 libraries_reason = "invalid_paths"
             else:
+                def has_minimal_library_yaml_selection(lib_id):
+                    allowed_markers = ("-collection_", "-overlay_", "-attribute_", "-top_level_")
+                    for key, value in libraries_data.items():
+                        if not isinstance(key, str) or not key.startswith(f"{lib_id}-"):
+                            continue
+                        if key in {f"{lib_id}-library", f"{lib_id}-playlist"}:
+                            continue
+                        if "-playlist" in key:
+                            continue
+                        if not any(marker in key for marker in allowed_markers):
+                            continue
+                        if not is_blank_value(value) and str(value).strip().lower() != "false":
+                            return True
+                    return False
+
+                missing_minimal_yaml = [
+                    lib_id
+                    for lib_id in selected_library_ids
+                    if not has_minimal_library_yaml_selection(lib_id)
+                ]
+                if missing_minimal_yaml:
+                    libraries_reason = "missing_library_defaults"
+
                 missing_placeholders = []
                 library_names = {}
                 for lib_id in selected_library_ids:
@@ -4737,14 +6312,15 @@ def validate_all_services():
                             return value
                     return None
 
-                for lib_id in selected_library_ids:
-                    use_separator = find_library_value(lib_id, ["template_variables[use_separator]", "attribute_use_separator"])
-                    if is_blank_value(use_separator) or str(use_separator).strip().lower() == "none":
-                        continue
-                    placeholder = find_library_value(lib_id, ["attribute_template_variables[placeholder_imdb_id]", "template_variables[placeholder_imdb_id]"])
-                    if is_blank_value(placeholder):
-                        missing_placeholders.append(library_names.get(lib_id, lib_id))
-                if missing_placeholders:
+                if libraries_reason is None:
+                    for lib_id in selected_library_ids:
+                        use_separator = find_library_value(lib_id, ["template_variables[use_separator]", "attribute_use_separator"])
+                        if is_blank_value(use_separator) or str(use_separator).strip().lower() == "none":
+                            continue
+                        placeholder = find_library_value(lib_id, ["attribute_template_variables[placeholder_imdb_id]", "template_variables[placeholder_imdb_id]"])
+                        if is_blank_value(placeholder):
+                            missing_placeholders.append(library_names.get(lib_id, lib_id))
+                if libraries_reason is None and missing_placeholders:
                     libraries_reason = "missing_placeholder_imdb"
 
             update_section_validation(
@@ -4755,19 +6331,6 @@ def validate_all_services():
                 details=missing_placeholders if libraries_reason == "missing_placeholder_imdb" else None,
             )
 
-        playlist_settings = persistence.retrieve_settings("027-playlist_files") or {}
-        playlist_payload = playlist_settings.get("playlist_files", {}) if isinstance(playlist_settings, dict) else {}
-        if isinstance(playlist_payload, dict) and isinstance(playlist_payload.get("playlist_files"), dict):
-            playlist_payload = playlist_payload.get("playlist_files", {})
-        libraries_value = ""
-        if isinstance(playlist_payload, dict):
-            libraries_value = playlist_payload.get("libraries") or ""
-        playlist_libraries = [lib.strip() for lib in str(libraries_value).split(",") if lib.strip()]
-        if playlist_libraries:
-            update_section_validation("027-playlist_files", "playlist_files", True)
-        else:
-            skip_section_validation("027-playlist_files", "playlist_files", reason="no_libraries")
-
     # Bulk validation for settings
     settings_settings = persistence.retrieve_settings("150-settings") or {}
     settings_section = settings_settings.get("settings", {}) if isinstance(settings_settings, dict) else {}
@@ -4776,13 +6339,15 @@ def validate_all_services():
     else:
         invalid_fields = []
 
-        def check_regex(key, pattern, flags=0):
+        def check_regex(key, pattern, flags=0, allow_blank=False):
             if key not in settings_section:
                 return
             value = settings_section.get(key)
             if value is None:
                 return
             if isinstance(value, str) and not value.strip():
+                if allow_blank:
+                    return
                 invalid_fields.append(key)
                 return
             value_text = str(value).strip()
@@ -4790,14 +6355,14 @@ def validate_all_services():
                 invalid_fields.append(key)
 
         check_regex("asset_depth", r"^(0|[1-9]\d*)$")
-        check_regex("overlay_artwork_quality", r"^(100|[1-9][0-9]?)$")
+        check_regex("overlay_artwork_quality", r"^(100|[1-9][0-9]?)$", allow_blank=True)
         check_regex("cache_expiration", r"^[1-9]\d*$")
         check_regex("item_refresh_delay", r"^(0|[1-9]\d*)$")
         check_regex("minimum_items", r"^[1-9]\d*$")
         check_regex("run_again_delay", r"^(0|[1-9]\d*)$")
-        check_regex("ignore_ids", r"^(None|\d{1,8}(,\d{1,8})*)$", flags=re.IGNORECASE)
-        check_regex("ignore_imdb_ids", r"^(None|tt\d{7,8}(,tt\d{7,8})*)$", flags=re.IGNORECASE)
-        check_regex("custom_repo", r"^(None|https?:\/\/[\da-z.-]+\.[a-z.]{2,6}([/\w.-]*)*\/?)$", flags=re.IGNORECASE)
+        check_regex("ignore_ids", r"^(None|\d{1,8}(,\d{1,8})*)$", flags=re.IGNORECASE, allow_blank=True)
+        check_regex("ignore_imdb_ids", r"^(None|tt\d{7,8}(,tt\d{7,8})*)$", flags=re.IGNORECASE, allow_blank=True)
+        check_regex("custom_repo", r"^(None|https?:\/\/[\da-z.-]+\.[a-z.]{2,6}([/\w.-]*)*\/?)$", flags=re.IGNORECASE, allow_blank=True)
 
         asset_dirs = settings_section.get("asset_directory") if isinstance(settings_section, dict) else None
         if isinstance(asset_dirs, str):
@@ -4903,6 +6468,7 @@ def validate_all_services():
         "missing_plex_validation": "Plex not validated",
         "no_libraries": "No libraries selected",
         "invalid_paths": "Invalid paths",
+        "missing_library_defaults": "Missing library defaults",
         "missing_placeholder_imdb": "Missing placeholder IMDb ID",
         "invalid_fields": "Invalid fields",
         "no_webhooks": "No webhooks configured",
@@ -6815,11 +8381,27 @@ def logscan_trends_page():
         progress_index = max(total_steps - 1, 0)
     page_info["progress"] = round(((progress_index + 1) / total_steps) * 100) if total_steps else 0
     available_configs = database.get_unique_config_names() or []
+    workspace_status = _build_workspace_status_context(page_info.get("config_name"), template_list, available_configs=available_configs)
     return render_template(
         "905-analytics.html",
         page_info=page_info,
         template_list=template_list,
         available_configs=available_configs,
+        jump_to_validations=workspace_status.get("jump_to_validations", {}),
+        step_statuses=workspace_status.get("step_statuses", {}),
+        section_statuses=workspace_status.get("section_statuses", {}),
+        required_keys=workspace_status.get("required_keys", []),
+        optional_keys=workspace_status.get("optional_keys", []),
+        review_keys=workspace_status.get("review_keys", []),
+        tautulli_requirement_reasons=workspace_status.get("tautulli_requirement_reasons", []),
+        omdb_requirement_reasons=workspace_status.get("omdb_requirement_reasons", []),
+        mdblist_requirement_reasons=workspace_status.get("mdblist_requirement_reasons", []),
+        anidb_requirement_reasons=workspace_status.get("anidb_requirement_reasons", []),
+        radarr_requirement_reasons=workspace_status.get("radarr_requirement_reasons", []),
+        sonarr_requirement_reasons=workspace_status.get("sonarr_requirement_reasons", []),
+        trakt_requirement_reasons=workspace_status.get("trakt_requirement_reasons", []),
+        mal_requirement_reasons=workspace_status.get("mal_requirement_reasons", []),
+        workspace_readiness=workspace_status.get("readiness", {}),
     )
 
 
@@ -7443,11 +9025,20 @@ def validate_kometa_root():
 
     log("✅ Kometa root is valid and ready.")
 
-    kometa_update_info = helpers.check_kometa_update(p)
-    if kometa_update_info["update_available"]:
-        log(f"⬆️ Update available: {kometa_update_info['local_version']} → {kometa_update_info['remote_version']}")
+    kometa_update_check_skipped = helpers.is_kometa_running()
+    if kometa_update_check_skipped:
+        kometa_update_info = {
+            "local_version": kometa_version,
+            "remote_version": "",
+            "update_available": False,
+        }
+        log("ℹ️ Kometa is currently running; update check skipped.")
     else:
-        log(f"✅ Kometa is up to date: {kometa_update_info['local_version']}")
+        kometa_update_info = helpers.check_kometa_update(p)
+        if kometa_update_info["update_available"]:
+            log(f"⬆️ Update available: {kometa_update_info['local_version']} → {kometa_update_info['remote_version']}")
+        else:
+            log(f"✅ Kometa is up to date: {kometa_update_info['local_version']}")
 
     return (
         jsonify(
@@ -7462,6 +9053,7 @@ def validate_kometa_root():
             local_version=kometa_update_info["local_version"],
             remote_version=kometa_update_info["remote_version"],
             kometa_update_available=kometa_update_info["update_available"],
+            kometa_update_check_skipped=kometa_update_check_skipped,
             log=logs,
         ),
         200,

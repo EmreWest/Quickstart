@@ -34,6 +34,7 @@ Kometa Quickstart is more than just a YAML generator - it's a full interactive e
 
 ### Config Management & History
 - **SQLite-Backed Storage:** All configs and page data are stored in a database, so you can switch between configs at any time
+- **Safe Config Switching:** Switching configs from the sidebar auto-saves the current page first, then refreshes readiness and TODO state for the selected config
 - **Automatic Backups:** Every config is saved as a versioned `.yml` file for historical reference
 - **Download & Run Anywhere:** Final configs can be downloaded and run outside Quickstart if preferred
 
@@ -41,10 +42,19 @@ Kometa Quickstart is more than just a YAML generator - it's a full interactive e
 - **Step-by-Step Pages:** Each section validates its own data, giving you instant feedback before proceeding
 - **Library Telemetry:** Pulls real Plex server data (Plex Pass status, library types, agent/scanner compatibility)
 - **Dynamic Toggles & Templates:** Rich UI for enabling collections, overlays, and builder template variables
+- **Dependency-Aware Optional Pages:** Optional pages such as Tautulli, OMDb, MDBList, AniDB, Radarr, Sonarr, Trakt, and MyAnimeList become required when selected library features need them
+- **TODO Sidebar:** Outstanding dependency and validation tasks are grouped into clickable cards that save the current page and open the affected setup page
+- **Library-Scoped Playlists:** Playlist file selection now lives on the Libraries page so playlists stay tied to the libraries included in the generated YAML
 - **Filtered Page Search:** Find matches on Libraries and Settings pages and auto-expand matching sections
 - **Settings Cog:** Quick access to runtime controls like debug mode and port changes from anywhere
 
 ![Libraries Page](static/images/readme/libraries-page.png)
+
+### Final Validation Gates
+- **Fail-Fast Setup Checks:** Final Validation stops at the TODO gate when required setup work remains instead of building YAML or checking Kometa prematurely
+- **Validation Freshness:** If bulk validation is stale, Quickstart automatically runs Validate All and refreshes workspace status before continuing
+- **Config Before Runtime:** Quickstart builds and validates the generated config before checking Kometa or showing run controls
+- **Kometa Update Guidance:** Missing Kometa is a hard blocker, while available Kometa updates are shown as guidance without blocking the run command
 
 ### Built-in Kometa Runner
 - **One-Click Execution:** The final page creates a Kometa virtual environment (if needed), installs dependencies, and runs `kometa.py` against the generated config
@@ -87,7 +97,11 @@ This reduces the chance of Plex background maintenance colliding with long Komet
 - **Preview required:** Quickstart always runs a preview before import and shows a line‑by‑line report (`imported / not imported`) with filters (All/Imported/Not Imported/Comments) and a downloadable report.
 - **Plex credentials prompt:** If the import contains libraries, Plex validation is required for mapping. Quickstart will prompt for Plex URL/token if none are present; if the credentials in the file fail validation, you’ll be prompted to correct them and re‑run Preview.
 - **Library mapping:** Imported library names must be mapped to Plex libraries (or ignored) before confirming the import; you can re‑preview after mapping.
-- **After import:** Quickstart redirects to Final Validation. Review each page and validate services (Plex/TMDB/etc.) before generating the final config.
+- **After import:** Quickstart stays on the Welcome page, runs bulk validation automatically, then refreshes the workspace status for the imported config.
+
+#### What happens after import?
+
+After you confirm an import, Quickstart saves the new config, shows a compact summary of imported sections, skipped sections, mapped libraries, and copied fonts, then runs bulk validation automatically. If validation fails for any page, Quickstart keeps the summary open with direct links to the failed pages. If validation passes, it refreshes the Welcome page with the imported config selected.
 
 ![Import Config](static/images/readme/import-config.png)
 
@@ -115,6 +129,7 @@ Special thanks to [meisnate12](https://github.com/meisnate12), [bullmoose20](htt
   - [Safe Playground Mode](#safe-playground-mode)
   - [Config Management \& History](#config-management--history)
   - [Guided, Validated Workflow](#guided-validated-workflow)
+  - [Final Validation Gates](#final-validation-gates)
   - [Built-in Kometa Runner](#built-in-kometa-runner)
   - [Live Previews \& Assets](#live-previews--assets)
   - [Automatic Updates](#automatic-updates)
@@ -374,12 +389,36 @@ Quickstart runs on port 7171 by default. You can change it in one of three ways:
 
 Quickstart uses pytest for unit/integration tests and Playwright for E2E tests.
 
+### Developer Testing
+
+Set up or refresh the local test environment, including runtime requirements, developer requirements, and Playwright browsers:
+
+```
+.\scripts\setup-dev.ps1
+```
+
+You can also run setup through the test runner:
+
+```
+.\scripts\run-tests.ps1 -Setup
+.\scripts\run-tests.ps1 -Setup -All
+```
+
 Run tests (PowerShell):
 
 ```
 .\scripts\run-tests.ps1          # Unit/integration (non-E2E)
 .\scripts\run-tests.ps1 -E2E     # End-to-end tests (Playwright)
 .\scripts\run-tests.ps1 -All     # Everything
+```
+
+Fast focused paths:
+
+```
+.\venv\Scripts\python.exe -m pytest tests\test_importer_edge_cases.py
+.\venv\Scripts\python.exe -m pytest tests\test_workspace_dependency_logic.py
+.\venv\Scripts\python.exe -m pytest tests\test_core_backend.py -k final
+.\scripts\run-tests.ps1 -E2E
 ```
 
 If you prefer raw commands:

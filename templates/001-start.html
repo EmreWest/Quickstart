@@ -96,7 +96,7 @@
               </div>
             </div>
           </div>
-          <p class="fs-5">Review the Config Data section below and press the arrow button above when you are ready to begin.</p>
+          <p class="fs-5">Review the Config Data section below and navigate to the next section when you are ready to begin.</p>
         </div>
       </div>
     </div>
@@ -134,6 +134,13 @@
       <input type="text" id="newConfigName" name="newConfigName" class="form-control" placeholder="Enter a new config name"
         value="{% if page_info['config_name'] not in available_configs %}{{ page_info['config_name'] }}{% else %}{{ page_info['new_config_name'] }}{% endif %}">
       <label for="newConfigName">New Config Name</label>
+    </div>
+
+    <div id="saveConfigRow" class="d-none mb-2">
+      <button type="button" class="btn btn-primary" id="saveConfigButton" disabled>
+        <i class="bi bi-floppy me-1"></i> Save & Activate Config
+      </button>
+      <div class="small text-muted mt-1">Commits the new config to the database and resets readiness for that config.</div>
     </div>
 
     <div class="d-flex flex-wrap gap-2 mt-2">
@@ -273,7 +280,7 @@
       </div>
       <div class="modal-body">
         <div class="alert alert-danger py-2 small mb-3" role="alert">
-          Import is experimental. Every attempt is made to import the file properly. Review each page after import and validate before generating the final config.
+          Import is experimental. Quickstart previews the file first, imports supported sections, then validates the imported config automatically.
         </div>
         <div class="mb-3">
           <label class="form-label" for="importConfigFile">Config File (.yml, .yaml, or .zip)</label>
@@ -351,7 +358,10 @@
 
         <div id="importPreviewSection" class="d-none mt-3">
           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <h6 class="mb-0">Import Report (Preview)</h6>
+            <div class="d-flex align-items-center gap-2">
+              <h6 class="mb-0">Import Report (Preview)</h6>
+              <span class="badge text-bg-info">Dry run - not saved</span>
+            </div>
             <div class="d-flex align-items-center gap-2">
               <span class="small text-muted" id="importSummary"></span>
               <a class="btn btn-sm btn-outline-light d-none" id="downloadImportReport" href="#" download>Download report</a>

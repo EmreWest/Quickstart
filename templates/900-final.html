@@ -1,7 +1,9 @@
 {% extends "000-base.html" %}
 {% block content %}
 {% include "001-navigation.html" %}
+{% if not final_gate or final_gate.stage != 'todo' %}
 {% include "modals/" + page_info['template_name'] + ".html" ignore missing %}
+{% endif %}
 
 <div id="plex-maintenance-window" data-window="{{ page_info.telemetry.maintenance_window }}"></div>
 <div id="qs-env" data-running-on="{{ version_info.running_on | default('') }}"></div>
@@ -25,13 +27,24 @@
 </div>
 
 <input type="hidden" id="header-style" name="header_style" value="{{ page_info.header_style }}">
+<div id="final-gate-state" class="d-none"
+  data-stage="{{ final_gate.stage if final_gate else 'config' }}"
+  data-todo-count="{{ final_gate.todo_count if final_gate else 0 }}"
+  data-auto-validate="{{ 'true' if final_gate and final_gate.stage == 'freshness' else 'false' }}"
+  data-config-valid="{{ 'true' if final_gate and final_gate.config_valid else 'false' }}"
+  data-bulk-fresh="{{ 'true' if final_gate and final_gate.bulk_validation_fresh else 'false' }}">
+</div>
 <div id="header-style-wait" class="form-text text-info mt-2 d-none">Updating header style... please wait.</div>
+{% if not final_gate or final_gate.stage != 'todo' %}
 <div class="accordion mt-2 mb-2" id="header-style-grid-accordion">
   <div class="accordion-item">
     <h2 class="accordion-header" id="header-style-grid-heading">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
         data-bs-target="#header-style-grid-collapse" aria-expanded="false" aria-controls="header-style-grid-collapse">
         Section Style:&nbsp;<span id="header-style-label">{{ page_info.header_style.replace('_', ' ')|capitalize }}</span>
+        <span id="header-style-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--ok">
+          Active
+        </span>
       </button>
     </h2>
     <div id="header-style-grid-collapse" class="accordion-collapse collapse"
@@ -49,21 +62,87 @@
     </div>
   </div>
 </div>
+{% endif %}
 
-{% if validation_meta %}
+{% if final_gate and final_gate.stage in ['todo', 'freshness', 'config'] %}
+<div id="final-gate-panel" class="alert qs-final-gate-panel qs-final-gate-panel--{{ final_gate.stage }} {{ 'alert-danger' if final_gate.stage == 'config' else '' }}" role="alert">
+  {% if final_gate.stage == 'todo' %}
+  <div class="fw-semibold mb-1 qs-final-gate-title">Resolve setup tasks first</div>
+  <div class="qs-final-gate-copy">
+    Final validation is blocked by {{ final_gate.todo_count }} workspace task{{ '' if final_gate.todo_count == 1 else 's' }}. Open the cards below to finish setup.
+  </div>
+  {% if final_gate.dependency_cards %}
+  <div class="qs-final-todo-grid mt-3">
+    {% for card in final_gate.dependency_cards %}
+    <button type="button"
+      class="qs-dependency-hint qs-final-todo-card {{ card.css_class }}"
+      onclick="jumpTo('{{ card.key }}', '{{ card.label }}')">
+      <div class="qs-dependency-hint-title">{{ card.title }}</div>
+      <div class="qs-dependency-hint-lines">
+        {% for reason in card.reasons %}
+        <div class="qs-dependency-hint-line">{{ reason }}</div>
+        {% endfor %}
+      </div>
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if final_gate.setup_blockers %}
+  <div class="d-flex flex-wrap gap-2 mt-3">
+    {% for blocker in final_gate.setup_blockers %}
+    <button type="button" class="btn btn-outline-warning btn-sm" onclick="jumpTo('{{ blocker.key }}', '{{ blocker.label }}')">
+      {{ blocker.label }}
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% elif final_gate.stage == 'freshness' %}
+  <div class="fw-semibold mb-1">Validation is stale</div>
+  <div>
+    Bulk validation is missing or older than {{ final_gate.validation_ttl_hours }} hours. Quickstart is running Validate All now and will refresh this page when it finishes.
+    <span class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>
+  </div>
+  {% elif final_gate.stage == 'config' %}
+  <div class="fw-semibold mb-1">Generated config needs attention</div>
+  <div>Fix the config validation errors below before checking Kometa or running the command.</div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if validation_meta and (not final_gate or final_gate.stage != 'todo') %}
 <div class="accordion mt-3 mb-3" id="validation-status-accordion">
   <div class="accordion-item">
     <h2 class="accordion-header" id="validation-status-heading">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
         data-bs-target="#validation-status-collapse" aria-expanded="false" aria-controls="validation-status-collapse">
         Validation status
+        {% set rollup_validated = validation_rollup_summary.get('validated', 0) if validation_rollup_summary else 0 %}
+        {% set rollup_failed = validation_rollup_summary.get('failed', 0) if validation_rollup_summary else 0 %}
+        {% set rollup_skipped = validation_rollup_summary.get('skipped', 0) if validation_rollup_summary else 0 %}
+        {% set rollup_unknown = validation_rollup_summary.get('unknown', 0) if validation_rollup_summary else 0 %}
+        {% if validation_rollup_state == 'error' %}
+        {% set rollup_label = rollup_failed ~ ' failed' %}
+        {% elif validation_rollup_state == 'warn' %}
+        {% set rollup_label = rollup_skipped ~ ' pending' %}
+        {% elif validation_rollup_state == 'ok' %}
+        {% set rollup_label = 'All good' %}
+        {% else %}
+        {% set rollup_label = 'Not run' %}
+        {% endif %}
+        <span id="validation-status-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--{{ validation_rollup_state }}"
+          data-qs-validation-rollup-badge
+          data-validated="{{ rollup_validated }}"
+          data-failed="{{ rollup_failed }}"
+          data-skipped="{{ rollup_skipped }}">
+          {{ rollup_label }}
+        </span>
         <span class="small text-muted ms-2">
-          Last run:
+          Last updated:
           <span id="validation-status-last-run" data-validation-iso="{{ validation_rollup_at | default('', true) }}">Never</span>
         </span>
       </button>
     </h2>
-    <div id="validation-status-collapse" class="accordion-collapse collapse" aria-labelledby="validation-status-heading"
+    <div id="validation-status-collapse" class="accordion-collapse collapse{% if final_gate and final_gate.stage == 'freshness' %} show{% endif %}" aria-labelledby="validation-status-heading"
       data-bs-parent="#validation-status-accordion">
       <div class="accordion-body">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
@@ -78,21 +157,27 @@
               <span class="rating-mapping-option-via rating-mapping-option-via--neutral">N/A</span>
             </div>
           </div>
-          <button id="validate-all-services" type="button" class="btn btn-outline-info btn-sm">
+          <button id="validate-all-services" type="button" class="btn btn-outline-info btn-sm" data-qs-validate-all>
             <i class="bi bi-check2-circle me-1"></i> Validate Configured Services
-            <span id="validate-all-spinner" class="spinner-border spinner-border-sm ms-1 d-none" role="status" aria-hidden="true"></span>
+            <span id="validate-all-spinner" class="spinner-border spinner-border-sm ms-1 d-none qs-validate-all-spinner" role="status" aria-hidden="true"></span>
           </button>
         </div>
-        <div class="small text-muted text-uppercase">Last validation summary</div>
-        <div id="validate-all-status" class="small text-muted">{{ validation_rollup if validation_rollup else 'No validation run yet.' }}</div>
+        <div class="small text-muted text-uppercase">Current validation summary</div>
+        <div id="validate-all-status" class="small text-muted">{{ validation_rollup if validation_rollup else 'Current status unavailable.' }}</div>
         <div class="small text-muted mb-2">
           Last updated:
           <span id="validate-all-status-time" data-validation-iso="{{ validation_rollup_at | default('', true) }}">—</span>
         </div>
-        {% set bulk_pages = ['010-plex','020-tmdb','025-libraries','027-playlist_files','030-tautulli','040-github','050-omdb','060-mdblist','070-notifiarr','080-gotify','085-ntfy','090-webhooks','100-anidb','110-radarr','120-sonarr','150-settings','130-trakt','140-mal'] %}
+        <div class="small text-muted text-uppercase">Last bulk validation run</div>
+        <div id="validate-all-status-bulk" class="small text-muted">{{ validation_bulk_rollup if validation_bulk_rollup else 'No bulk validation run yet.' }}</div>
+        <div class="small text-muted mb-2">
+          Bulk updated:
+          <span id="validate-all-status-bulk-time" data-validation-iso="{{ validation_bulk_rollup_at | default('', true) }}">—</span>
+        </div>
+        {% set bulk_pages = ['010-plex','020-tmdb','025-libraries','030-tautulli','040-github','050-omdb','060-mdblist','070-notifiarr','080-gotify','085-ntfy','090-webhooks','100-anidb','110-radarr','120-sonarr','150-settings','130-trakt','140-mal'] %}
         {% set interactive_pages = [] %}
         {% set nonservice_pages = ['001-start','900-final','910-sponsor','905-analytics'] %}
-        <div class="table-responsive">
+        <div class="table-responsive" data-qs-sticky-first="true">
           <table class="table table-sm table-dark table-striped align-middle mb-0">
             <thead>
               <tr>
@@ -210,15 +295,21 @@
   {% endfor %}
 </div>
 {% endif %}
-<div class="accordion mt-3" id="config-output-accordion">
+<div class="accordion mt-3{% if final_gate and final_gate.stage in ['todo', 'freshness'] %} d-none{% endif %}" id="config-output-accordion">
   <div class="accordion-item">
     <h2 class="accordion-header" id="config-output-heading">
-      <button class="accordion-button" type="button" data-bs-toggle="collapse"
-        data-bs-target="#config-output-collapse" aria-expanded="true" aria-controls="config-output-collapse">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+        data-bs-target="#config-output-collapse" aria-expanded="false" aria-controls="config-output-collapse">
         Config Output
+        <span id="config-output-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+          Pending
+        </span>
+        <span id="config-output-lines-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+          0 lines
+        </span>
       </button>
     </h2>
-    <div id="config-output-collapse" class="accordion-collapse collapse show" aria-labelledby="config-output-heading"
+    <div id="config-output-collapse" class="accordion-collapse collapse" aria-labelledby="config-output-heading"
       data-bs-parent="#config-output-accordion">
       <div class="accordion-body">
         <div class="form-floating mb-2">
@@ -256,18 +347,69 @@
   </div>
 </div>
 
-{% if yaml_content %}
+{% if yaml_content and page_info.yaml_valid %}
 <!-- Run Command Builder -->
 <div id="run-controls-container" class="d-none">
   <hr>
   <h5 class="mt-3">
-    Build Your Kometa Run Command
+    Prepare and Run Kometa
     <a href="https://kometa.wiki/en/nightly/kometa/environmental/" target="_blank" class="text-decoration-none ms-2">
       <i class="bi bi-box-arrow-up-right text-info" data-bs-toggle="tooltip"
         aria-label="Open Kometa CLI flag documentation"
         data-bs-original-title="Open Kometa CLI flag documentation - Run Commands & Environment Variables"></i>
     </a>
   </h5>
+
+  <!-- Kometa actions (validate/install before command options) -->
+  <div class="accordion mt-3" id="kometa-actions-accordion">
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="kometa-actions-heading">
+        <button id="kometa-actions-toggle" class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+          data-bs-target="#kometa-actions-collapse" aria-expanded="false" aria-controls="kometa-actions-collapse">
+          Prepare Kometa Install / Update
+          <span id="kometa-update-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+            Not checked
+          </span>
+        </button>
+      </h2>
+      <div id="kometa-actions-collapse" class="accordion-collapse collapse" aria-labelledby="kometa-actions-heading"
+        data-bs-parent="#kometa-actions-accordion">
+        <div class="accordion-body">
+          <div id="kometa-actions">
+            <div class="alert alert-secondary mb-0">
+              <div class="small text-muted mb-2">
+                Validate the local Kometa folder and apply updates before starting a run.
+              </div>
+              <div class="mb-2">
+                Kometa will be installed/updated in:
+                <code id="kometa-install-path">{{ kometa_default_display }}</code>
+              </div>
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <button id="update-kometa-btn" type="button" class="btn btn-primary btn-sm"
+                  data-branch="{{ version_info.branch }}">
+                  <i class="bi bi-arrow-clockwise me-1"></i> Check for Kometa Updates
+                </button>
+                <div class="form-check form-switch small">
+                  <input class="form-check-input" type="checkbox" id="force-kometa-update">
+                  <label class="form-check-label" for="force-kometa-update">Force update</label>
+                </div>
+              </div>
+              <div class="form-text text-muted mt-1">
+                Force update re-downloads Kometa even if it is already up to date.
+              </div>
+              <div id="kometa-update-box" class="alert alert-warning mt-2 mb-0 d-none" role="alert">
+                Update available: <span id="kometa-local-version"></span> -> <span id="kometa-remote-version"></span>.
+                Click "Update Available" to apply it.
+              </div>
+
+              <pre id="kometa-validation-log" class="form-control bg-dark text-light mt-3"
+                style="height: 300px; overflow-y: auto; overflow-x: auto; white-space: pre;"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="mt-4" id="run-command-section">
     <!-- Existing content remains unchanged inside this block -->
@@ -276,12 +418,15 @@
       <!-- Execution Mode & CLI Toggle -->
       <div class="accordion-item">
         <h2 class="accordion-header" id="heading-mode">
-          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-mode"
-            aria-expanded="true" aria-controls="collapse-mode">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-mode"
+            aria-expanded="false" aria-controls="collapse-mode">
             Execution Mode & CLI Toggle
+            <span id="heading-mode-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+              Friendly
+            </span>
           </button>
         </h2>
-        <div id="collapse-mode" class="accordion-collapse collapse show" aria-labelledby="heading-mode"
+        <div id="collapse-mode" class="accordion-collapse collapse" aria-labelledby="heading-mode"
           data-bs-parent="#run-command-accordion">
           <div class="accordion-body">
             <div class="form-check form-switch mb-2">
@@ -298,6 +443,9 @@
           <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
             data-bs-target="#collapse-runopt" aria-expanded="false" aria-controls="collapse-runopt">
             Run Option
+            <span id="heading-runopt-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+              Default
+            </span>
           </button>
         </h2>
         <div id="collapse-runopt" class="accordion-collapse collapse" aria-labelledby="heading-runopt"
@@ -364,6 +512,9 @@
           <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
             data-bs-target="#collapse-modeflags" aria-expanded="false" aria-controls="collapse-modeflags">
             Optional Mode Flags
+            <span id="heading-modeflags-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+              Default
+            </span>
           </button>
         </h2>
         <div id="collapse-modeflags" class="accordion-collapse collapse" aria-labelledby="heading-modeflags"
@@ -391,6 +542,9 @@
           <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
             data-bs-target="#collapse-logflags" aria-expanded="false" aria-controls="collapse-logflags">
             Logging Options
+            <span id="heading-logflags-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+              Default
+            </span>
           </button>
         </h2>
         <div id="collapse-logflags" class="accordion-collapse collapse" aria-labelledby="heading-logflags"
@@ -418,6 +572,9 @@
           <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
             data-bs-target="#collapse-otherflags" aria-expanded="false" aria-controls="collapse-otherflags">
             Other Flags
+            <span id="heading-otherflags-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+              Default
+            </span>
           </button>
         </h2>
         <div id="collapse-otherflags" class="accordion-collapse collapse" aria-labelledby="heading-otherflags"
@@ -478,61 +635,19 @@
 
     </div>
 
-    <!-- Kometa actions (always visible) -->
-    <div class="accordion mt-3" id="kometa-actions-accordion" style="max-width: 1200px; width: 100%; margin: 0 auto;">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="kometa-actions-heading">
-          <button id="kometa-actions-toggle" class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-            data-bs-target="#kometa-actions-collapse" aria-expanded="false" aria-controls="kometa-actions-collapse">
-            Kometa Install / Update
-          </button>
-        </h2>
-        <div id="kometa-actions-collapse" class="accordion-collapse collapse" aria-labelledby="kometa-actions-heading"
-          data-bs-parent="#kometa-actions-accordion">
-          <div class="accordion-body">
-            <div id="kometa-actions">
-              <div class="alert alert-secondary mb-0">
-                <div class="mb-2">
-                  Kometa will be installed/updated in:
-                  <code id="kometa-install-path">{{ kometa_default_display }}</code>
-                </div>
-                <div class="d-flex flex-wrap align-items-center gap-3">
-                  <button id="update-kometa-btn" type="button" class="btn btn-primary btn-sm"
-                    data-branch="{{ version_info.branch }}">
-                    <i class="bi bi-arrow-clockwise me-1"></i> Check for Kometa Updates
-                  </button>
-                  <div class="form-check form-switch small">
-                    <input class="form-check-input" type="checkbox" id="force-kometa-update">
-                    <label class="form-check-label" for="force-kometa-update">Force update</label>
-                  </div>
-                </div>
-                <div class="form-text text-muted mt-1">
-                  Force update re-downloads Kometa even if it is already up to date.
-                </div>
-                <div id="kometa-update-box" class="alert alert-warning mt-2 mb-0 d-none" role="alert">
-                  Update available: <span id="kometa-local-version"></span> -> <span id="kometa-remote-version"></span>.
-                  Click "Update Available" to apply it.
-                </div>
-
-                <pre id="kometa-validation-log" class="form-control bg-dark text-light mt-3"
-                  style="height: 300px; overflow-y: auto; overflow-x: auto; white-space: pre;"></pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Command Output -->
     <div id="run-command-output-accordion" class="accordion mt-3 d-none">
       <div class="accordion-item">
         <h2 class="accordion-header" id="run-command-output-heading">
-          <button class="accordion-button" type="button" data-bs-toggle="collapse"
-            data-bs-target="#run-command-output-collapse" aria-expanded="true" aria-controls="run-command-output-collapse">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+            data-bs-target="#run-command-output-collapse" aria-expanded="false" aria-controls="run-command-output-collapse">
             Run Command
+            <span id="run-command-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+              Pending
+            </span>
           </button>
         </h2>
-        <div id="run-command-output-collapse" class="accordion-collapse collapse show"
+        <div id="run-command-output-collapse" class="accordion-collapse collapse"
           aria-labelledby="run-command-output-heading" data-bs-parent="#run-command-output-accordion">
           <div class="accordion-body">
             <div id="run-command-box" class="position-relative border rounded bg-body-tertiary p-3 d-none">
@@ -617,7 +732,7 @@
           <div id="run-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
         </div>
         <div id="run-prep-row" class="mb-2 d-none"></div>
-        <div class="table-responsive">
+        <div class="table-responsive" data-qs-sticky-first="true">
                   <table class="table table-sm table-striped mb-0">
                     <thead>
                       <tr id="run-library-header">
@@ -749,6 +864,9 @@
                 data-bs-target="#logscan-accordion-collapse" aria-expanded="false"
                 aria-controls="logscan-accordion-collapse">
                 <span>Logscan Recommendations</span>
+                <span id="logscan-rollup-badge" class="badge ms-2 qs-validation-rollup-badge qs-validation-rollup-badge--unknown">
+                  Pending
+                </span>
                 <small class="text-muted ms-2" id="logscan-summary"></small>
               </button>
             </h2>
