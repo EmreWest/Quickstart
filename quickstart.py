@@ -176,8 +176,6 @@ QS_MAL_REQUIRED_STEP_KEY = "140-mal"
 QS_TAUTULLI_DEP_COLLECTION_IDS = {"collection_tautulli"}
 QS_TRAKT_DEP_COLLECTION_IDS = {"collection_trakt"}
 QS_MAL_DEP_COLLECTION_IDS = {"collection_myanimelist"}
-QS_ANIDB_DEP_COLLECTION_IDS = {"collection_use_anidb"}
-QS_ANIDB_DEP_TEMPLATE_COLLECTION_IDS = {"use_anidb"}
 QS_OMDB_DEP_SOURCE_PREFIXES = ("omdb",)
 QS_MDBLIST_DEP_SOURCE_PREFIXES = ("mdb",)
 QS_ANIDB_DEP_SOURCE_PREFIXES = ("anidb",)
@@ -643,23 +641,11 @@ def _libraries_data_anidb_dependency_reasons(libraries_data):
         libraries_data,
         QS_ANIDB_DEP_SOURCE_PREFIXES,
     )
-    collection_reasons = _libraries_data_collection_dependency_reasons(
-        libraries_data,
-        QS_ANIDB_DEP_COLLECTION_IDS,
-        "AniDB Popular collection enabled",
-    )
-    template_collection_reasons = _libraries_data_template_collection_dependency_reasons(
-        libraries_data,
-        QS_ANIDB_DEP_TEMPLATE_COLLECTION_IDS,
-        "AniDB Popular collection enabled",
-    )
     overlay_reasons = _libraries_data_overlay_rating_dependency_reasons(
         libraries_data,
         QS_ANIDB_OVERLAY_IMAGE_VALUES,
     )
-    merged_reasons = attribute_reasons + [reason for reason in collection_reasons if reason not in attribute_reasons]
-    merged_reasons += [reason for reason in template_collection_reasons if reason not in merged_reasons]
-    return merged_reasons + [reason for reason in overlay_reasons if reason not in merged_reasons]
+    return attribute_reasons + [reason for reason in overlay_reasons if reason not in attribute_reasons]
 
 
 def _libraries_data_radarr_dependency_reasons(libraries_data):
@@ -7706,6 +7692,54 @@ def logscan_progress():
 
         cached = LOGSCAN_PROGRESS_CACHE
 
+        def _coerce_progress_datetime(value):
+            if not value:
+                return None
+            try:
+                ts = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                if ts.tzinfo is not None:
+                    ts = ts.astimezone().replace(tzinfo=None)
+                return ts
+            except Exception:
+                return None
+
+        def refresh_live_progress_elapsed(data, running, started_at):
+            if not isinstance(data, dict) or not running:
+                return data
+            data = deepcopy(data)
+            now_ts = datetime.now()
+
+            prep_locked = data.get("preparation_seconds")
+            if not isinstance(prep_locked, (int, float)):
+                prep_start = _coerce_progress_datetime(started_at)
+                if prep_start and now_ts > prep_start:
+                    data["preparation_elapsed_seconds"] = max(0, int((now_ts - prep_start).total_seconds()))
+
+            current_library = data.get("current_library")
+            phase_current = data.get("phase_current")
+            phase_starts = data.get("phase_starts") or {}
+            if current_library and phase_current and isinstance(phase_starts, dict):
+                phase_key = f"{current_library}||{phase_current}"
+                start_ts = _coerce_progress_datetime(phase_starts.get(phase_key))
+                if start_ts:
+                    base = 0
+                    for entry in data.get("libraries") or []:
+                        if entry.get("name") == current_library:
+                            durations = entry.get("durations") or {}
+                            if isinstance(durations.get(phase_current), (int, float)):
+                                base = int(durations.get(phase_current) or 0)
+                            break
+                    data["current_phase_elapsed_seconds"] = base + max(0, int((now_ts - start_ts).total_seconds()))
+
+            if data.get("playlist_running"):
+                playlist_started_at = _coerce_progress_datetime(data.get("playlist_started_at"))
+                if playlist_started_at:
+                    playlist_total = data.get("playlist_total_seconds")
+                    base = int(playlist_total or 0) if isinstance(playlist_total, (int, float)) else 0
+                    data["playlist_elapsed_seconds"] = base + max(0, int((now_ts - playlist_started_at).total_seconds()))
+
+            return data
+
         def normalize_progress_for_stopped(data, running, stopped_requested):
             if not isinstance(data, dict) or running:
                 return data
@@ -7743,6 +7777,7 @@ def logscan_progress():
 
         if log_stats and cached.get("mtime") == log_stats.st_mtime and cached.get("size") == log_stats.st_size:
             data = cached.get("data") or {}
+            data = refresh_live_progress_elapsed(data, running, started_at)
             data = normalize_progress_for_stopped(data, running, stopped_requested)
             return jsonify(data)
 
@@ -7761,6 +7796,8 @@ def logscan_progress():
             selected_libraries=selected,
             previous=LOGSCAN_PROGRESS_CACHE.get("data"),
             run_started_at=started_at,
+            now_ts=datetime.now(timezone.utc),
+            is_running=running,
         )
         phase_order = _get_progress_run_order(config_data=config_data)
         allowed_phases = phase_order or ["operations", "metadata", "collections", "overlays"]
@@ -10106,21 +10143,6 @@ def validate_kometa_root():
 
     log("✅ Kometa root is valid and ready.")
 
-    kometa_update_check_skipped = helpers.is_kometa_running()
-    if kometa_update_check_skipped:
-        kometa_update_info = {
-            "local_version": kometa_version,
-            "remote_version": "",
-            "update_available": False,
-        }
-        log("ℹ️ Kometa is currently running; update check skipped.")
-    else:
-        kometa_update_info = helpers.check_kometa_update(p)
-        if kometa_update_info["update_available"]:
-            log(f"⬆️ Update available: {kometa_update_info['local_version']} → {kometa_update_info['remote_version']}")
-        else:
-            log(f"✅ Kometa is up to date: {kometa_update_info['local_version']}")
-
     return (
         jsonify(
             success=True,
@@ -10131,11 +10153,164 @@ def validate_kometa_root():
             kometa_root_display=kometa_root_display,
             venv_python_display=str(python_bin),
             kometa_version=kometa_version,
-            local_version=kometa_update_info["local_version"],
-            remote_version=kometa_update_info["remote_version"],
-            kometa_update_available=kometa_update_info["update_available"],
-            kometa_update_check_skipped=kometa_update_check_skipped,
             log=logs,
+        ),
+        200,
+    )
+
+
+def _probe_kometa_root_state(path_obj):
+    p = Path(path_obj)
+    kometa_root_posix = p.as_posix()
+    kometa_root_display = str(p)
+    is_windows = sys.platform.startswith("win")
+    venv_dir = p / "kometa-venv"
+    bin_dir = venv_dir / ("Scripts" if is_windows else "bin")
+    python_bin = bin_dir / ("python.exe" if is_windows else "python")
+    version_path = p / "VERSION"
+    kometa_py = p / "kometa.py"
+    requirements = p / "requirements.txt"
+    config_dir = p / "config"
+    version_value = "Unknown"
+    if version_path.exists():
+        try:
+            version_value = version_path.read_text(encoding="utf-8").strip() or "Unknown"
+        except Exception:
+            version_value = "Unknown"
+
+    return {
+        "kometa_root": kometa_root_posix,
+        "kometa_root_display": kometa_root_display,
+        "venv_python": python_bin.as_posix(),
+        "venv_python_display": str(python_bin),
+        "kometa_version": version_value,
+        "root_exists": p.exists(),
+        "config_dir_exists": config_dir.exists(),
+        "kometa_installed": kometa_py.exists() and requirements.exists(),
+        "venv_exists": venv_dir.exists(),
+        "venv_python_exists": python_bin.exists(),
+        "kometa_running": helpers.is_kometa_running(),
+    }
+
+
+@app.route("/probe-kometa-root", methods=["POST"])
+def probe_kometa_root():
+    payload = request.get_json(silent=True) or {}
+    root_path = str(payload.get("path", "")).strip()
+    logs = []
+
+    def log(msg):
+        print(msg, file=sys.stderr)
+        logs.append(msg)
+
+    if not root_path:
+        log("❌ No path provided.")
+        return jsonify(success=False, error="No path provided.", log=logs), 400
+
+    p = _resolve_user_dir(root_path)
+    if not p:
+        log("❌ Invalid path provided.")
+        return jsonify(success=False, error="Invalid path provided.", log=logs), 400
+
+    session["kometa_root"] = p.as_posix()
+    app.config["KOMETA_ROOT"] = str(p)
+
+    state = _probe_kometa_root_state(p)
+    log(f"🔍 Probing Kometa path: {state['kometa_root_display']}")
+    if not state["root_exists"]:
+        log("ℹ️ Kometa root does not exist yet. Install required.")
+    elif not state["kometa_installed"]:
+        log("ℹ️ Kometa files not found yet. Install required.")
+    else:
+        log("✅ Kometa files detected locally.")
+        if state["kometa_version"]:
+            log(f"📦 Local Kometa version: {state['kometa_version']}")
+        if state["venv_python_exists"]:
+            log(f"🐍 Kometa venv python detected at: {state['venv_python_display']}")
+        else:
+            log("ℹ️ Kometa venv python not present yet. Prepare step still needed.")
+    if state["kometa_running"]:
+        log("ℹ️ Kometa is currently running.")
+
+    return jsonify(success=True, log=logs, **state), 200
+
+
+@app.route("/check-kometa-update", methods=["POST"])
+def check_kometa_update():
+    payload = request.get_json(silent=True) or {}
+    root_path = str(payload.get("path", "")).strip()
+    logs = []
+
+    def log(msg):
+        print(msg, file=sys.stderr)
+        logs.append(msg)
+
+    if not root_path:
+        log("❌ No path provided.")
+        return jsonify(success=False, error="No path provided.", log=logs), 400
+
+    p = _resolve_user_dir(root_path)
+    if not p:
+        log("❌ Invalid path provided.")
+        return jsonify(success=False, error="Invalid path provided.", log=logs), 400
+
+    session["kometa_root"] = p.as_posix()
+    app.config["KOMETA_ROOT"] = str(p)
+
+    state = _probe_kometa_root_state(p)
+    if not state["kometa_installed"]:
+        log("ℹ️ Kometa is not installed yet; update check skipped.")
+        return (
+            jsonify(
+                success=True,
+                log=logs,
+                update_check_completed=False,
+                kometa_update_check_skipped=False,
+                local_version=state["kometa_version"],
+                remote_version="",
+                kometa_update_available=False,
+                cached=False,
+                **state,
+            ),
+            200,
+        )
+
+    if state["kometa_running"]:
+        log("ℹ️ Kometa is currently running; update check skipped.")
+        return (
+            jsonify(
+                success=True,
+                log=logs,
+                update_check_completed=True,
+                kometa_update_check_skipped=True,
+                local_version=state["kometa_version"],
+                remote_version="",
+                kometa_update_available=False,
+                cached=False,
+                **state,
+            ),
+            200,
+        )
+
+    update_info = helpers.get_cached_kometa_update(p, force_refresh=helpers.booler(payload.get("force", False)))
+    local_version = update_info.get("local_version") or state["kometa_version"]
+    remote_version = update_info.get("remote_version") or ""
+    if update_info.get("update_available"):
+        log(f"⬆️ Update available: {local_version} → {remote_version}")
+    else:
+        log(f"✅ Kometa is up to date: {local_version}")
+
+    return (
+        jsonify(
+            success=True,
+            log=logs,
+            update_check_completed=True,
+            kometa_update_check_skipped=False,
+            local_version=local_version,
+            remote_version=remote_version,
+            kometa_update_available=bool(update_info.get("update_available")),
+            cached=bool(update_info.get("cached")),
+            **state,
         ),
         200,
     )
@@ -10163,6 +10338,10 @@ def update_kometa():
             logs.append("Force update enabled.")
 
         result = helpers.perform_kometa_update_zip_only(cfg_dir, branch=kometa_branch, force=force_update)
+        try:
+            helpers.invalidate_cached_kometa_update(cfg_dir)
+        except Exception:
+            pass
         logs.extend(result.get("log", []))
         status = 200 if result.get("success") else 500
 
