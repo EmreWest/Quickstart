@@ -75,6 +75,7 @@ $(document).ready(function () {
   const $kometaRemoteVersionStatus = $('#kometa-remote-version-status')
   const $kometaVersionSourceUrl = $('#kometa-version-source-url')
   const $kometaZipSourceUrl = $('#kometa-zip-source-url')
+  const $kometaMaintenancePageBadge = $('#kometa-maintenance-page-badge')
   const $runStatusRow = $('#run-status-row')
   const $runStatusTimer = $('#run-status-timer')
   const $runStatusMetrics = $('#run-status-metrics')
@@ -110,6 +111,35 @@ $(document).ready(function () {
   let kometaRemoteVersionChecked = false
   let kometaRemoteVersionSkipped = false
   let kometaUpdatePhaseStatus = 'idle'
+
+  function syncKometaMaintenancePageBadge (data) {
+    if (!$kometaMaintenancePageBadge.length) return
+    const paused = Boolean(data && data.maintenance_paused)
+    const pending = Boolean(data && data.pending_start)
+    const active = Boolean(data && data.maintenance_active)
+    const windowLabel = data && data.maintenance_window ? ` (${data.maintenance_window})` : ''
+    let label = ''
+
+    if (paused) {
+      label = `Paused for Plex maintenance${windowLabel}`
+    } else if (pending) {
+      label = `Queued for Plex maintenance${windowLabel}`
+    } else if (active) {
+      label = `Plex maintenance active${windowLabel}`
+    }
+
+    if (label) {
+      $kometaMaintenancePageBadge.removeClass('d-none')
+      const textEl = $kometaMaintenancePageBadge.find('span').last()
+      if (textEl.length) textEl.text(label)
+    } else {
+      $kometaMaintenancePageBadge.addClass('d-none')
+    }
+  }
+
+  document.addEventListener('qs:maintenance-status', function (event) {
+    syncKometaMaintenancePageBadge(event.detail || null)
+  })
 
   function readMetaFlag (id, datasetKey, attrKey) {
     const el = document.getElementById(id)
@@ -390,7 +420,7 @@ $(document).ready(function () {
   $yamlOutput.on('input', updateYamlLineCount)
 
   function normalizeFontName (value) {
-    return String(value || '').trim()
+    return String(value || '').trim().replace(/_/g, ' ')
   }
 
   function formatHeaderStyleLabel (value) {
@@ -1456,22 +1486,27 @@ $(document).ready(function () {
 
   function pollKometaUpdateProgress () {
     if (!kometaUpdateJobId) return Promise.resolve(null)
-    return fetch(`/update-kometa-progress?job_id=${encodeURIComponent(kometaUpdateJobId)}&since=${encodeURIComponent(String(kometaUpdateLogIndex))}`)
+    return fetch(`/background-jobs/${encodeURIComponent(kometaUpdateJobId)}?since=${encodeURIComponent(String(kometaUpdateLogIndex))}`)
       .then(async res => {
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to fetch Kometa update progress.')
+        if (!res.ok || !data.success || !data.job) throw new Error(data.error || 'Failed to fetch Kometa update progress.')
         return data
       })
       .then(data => {
-        if (data.phase === 'queued') setKometaUpdatePhaseBadge('queued')
-        if (data.phase === 'error') setKometaUpdatePhaseBadge('failed')
+        const job = data.job || {}
+        if (job.phase === 'queued') setKometaUpdatePhaseBadge('queued')
+        if (job.phase === 'error') setKometaUpdatePhaseBadge('failed')
         const lines = Array.isArray(data.lines) ? data.lines : []
         lines.forEach(line => appendKometaStatusLine(line))
         if (typeof data.next_index === 'number') kometaUpdateLogIndex = data.next_index
         if (data.done) {
           stopKometaUpdatePolling()
         }
-        return data
+        return Object.assign({}, job, {
+          lines,
+          next_index: data.next_index,
+          done: data.done
+        })
       })
   }
 
@@ -3014,7 +3049,7 @@ $(document).ready(function () {
     if (getFinalGateState().autoValidate && window.QSBulkValidation && typeof window.QSBulkValidation.run === 'function') {
       window.QSBulkValidation.run({ source: 'final-freshness', silentToast: true })
         .then(() => {
-          showToast('info', 'Validate All complete. Refreshing final validation...')
+          showToast('info', 'Validate All complete. Refreshing Kometa...')
           setTimeout(() => window.location.reload(), 300)
         })
         .catch(() => {})

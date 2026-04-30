@@ -7,52 +7,80 @@
     <div class="logscan-control-shell">
       <div class="logscan-control-copy">
         <p class="text-muted small mb-0">
-          Recent Kometa runs parsed from <code>config/kometa/config/logs/meta.log</code>. Tokens and secrets are excluded.
+          Recent Kometa and ImageMaid runs parsed from their Quickstart-managed logs. Tokens and secrets are excluded.
         </p>
       </div>
       <div class="logscan-control-grid">
-        <select id="logscan-trends-limit" class="form-select form-select-sm w-auto logscan-control-field"
-          title="Display limit only. Does not affect reingest.">
-          <option value="10">Last 10 runs</option>
-          <option value="25" selected>Last 25 runs</option>
-          <option value="50">Last 50 runs</option>
-          <option value="100">Last 100 runs</option>
-          <option value="500">Last 500 runs</option>
-        </select>
-        <div id="logscan-trends-count" class="small text-muted logscan-run-count"></div>
-        <div class="input-group input-group-sm w-auto logscan-date-range">
-          <span class="input-group-text">From</span>
-          <input id="logscan-trends-date-start" type="date" class="form-control form-control-sm"
-            title="Start date">
-          <span class="input-group-text">To</span>
-          <input id="logscan-trends-date-end" type="date" class="form-control form-control-sm" title="End date">
+        <div class="logscan-filter-row logscan-filter-row-primary">
+          <select id="logscan-trends-limit" class="form-select form-select-sm w-auto logscan-control-field"
+            title="Display limit only. Does not affect reingest.">
+            <option value="10">Last 10 runs</option>
+            <option value="25">Last 25 runs</option>
+            <option value="50">Last 50 runs</option>
+            <option value="100">Last 100 runs</option>
+            <option value="500" selected>Last 500 runs</option>
+            <option value="all">All runs</option>
+          </select>
+          <div class="input-group input-group-sm w-auto logscan-app-filter">
+            <span class="input-group-text">App</span>
+            <select id="logscan-trends-tool-filter" class="form-select form-select-sm logscan-control-field"
+              title="Filter visuals by app.">
+              <option value="">All apps</option>
+            </select>
+          </div>
+          <select id="logscan-trends-config-filter" class="form-select form-select-sm w-auto logscan-control-field"
+            title="Filter visuals by tracked config.">
+            <option value="">All configs</option>
+          </select>
+          <div class="input-group input-group-sm w-auto logscan-time-range">
+            <span class="input-group-text">Time range</span>
+            <select id="logscan-trends-time-range" class="form-select form-select-sm logscan-control-field"
+              title="Filter visuals by time window.">
+              <option value="all" selected>All time</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="custom">Custom range</option>
+            </select>
+          </div>
+          <div id="logscan-trends-count" class="small text-muted logscan-run-count"></div>
         </div>
-        <select id="logscan-trends-config-filter" class="form-select form-select-sm w-auto logscan-control-field"
-          title="Filter visuals by tracked config.">
-          <option value="">All configs</option>
-        </select>
-        <select id="logscan-trends-command-filter" class="form-select form-select-sm w-auto logscan-control-field"
-          title="Filter visuals by run command.">
-          <option value="">All commands</option>
-        </select>
-        <select id="logscan-trends-library-filter" class="form-select form-select-sm w-auto logscan-control-field"
-          title="Filter library inventory by library.">
-          <option value="">All libraries</option>
-        </select>
-        <button id="logscan-trends-preferences" class="btn nav-button btn-sm logscan-control-action" type="button"
-          data-bs-toggle="modal" data-bs-target="#logscan-preferences-modal">
-          Customize
-        </button>
-        <button id="logscan-trends-reset-filters" class="btn nav-button btn-sm logscan-control-action" type="button">
-          Reset filters
-        </button>
-        <a id="logscan-trends-missing-download" class="btn nav-button btn-sm d-none logscan-control-action" href="/logscan/trends/people-missing">
-          Download missing people log
-        </a>
-        <button id="logscan-trends-reingest" class="btn nav-button btn-sm logscan-control-action" type="button"
-          data-bs-toggle="modal" data-bs-target="#logscan-reingest-modal">Reingest logs</button>
-        <button id="logscan-trends-reset" class="btn nav-button btn-sm logscan-control-action" type="button"
-          data-bs-toggle="modal" data-bs-target="#logscan-reset-modal">Reset trends</button>
+        <div class="logscan-filter-row logscan-filter-row-custom d-none" id="logscan-trends-custom-date-row">
+          <div class="input-group input-group-sm w-auto logscan-date-range">
+            <span class="input-group-text">From</span>
+            <input id="logscan-trends-date-start" type="date" class="form-control form-control-sm"
+              title="Start date">
+            <span class="input-group-text">To</span>
+            <input id="logscan-trends-date-end" type="date" class="form-control form-control-sm" title="End date">
+          </div>
+          <div id="logscan-trends-date-hint" class="small text-muted logscan-date-hint"></div>
+        </div>
+        <div class="logscan-filter-row logscan-filter-row-secondary">
+          <select id="logscan-trends-command-filter" class="form-select form-select-sm w-auto logscan-control-field"
+            title="Filter visuals by run command.">
+            <option value="">All commands</option>
+          </select>
+          <select id="logscan-trends-library-filter" class="form-select form-select-sm w-auto logscan-control-field"
+            title="Filter library inventory by library.">
+            <option value="">All libraries</option>
+          </select>
+          <button id="logscan-trends-preferences" class="btn nav-button btn-sm logscan-control-action" type="button"
+            data-bs-toggle="modal" data-bs-target="#logscan-preferences-modal">
+            Customize
+          </button>
+          <button id="logscan-trends-reset-filters" class="btn nav-button btn-sm logscan-control-action" type="button">
+            Reset filters
+          </button>
+        </div>
+        <div class="logscan-filter-row logscan-filter-row-actions">
+          <a id="logscan-trends-missing-download" class="btn nav-button btn-sm d-none logscan-control-action" href="/logscan/trends/people-missing">
+            Download missing people log
+          </a>
+          <button id="logscan-trends-reingest" class="btn nav-button btn-sm logscan-control-action" type="button"
+            data-bs-toggle="modal" data-bs-target="#logscan-reingest-modal">Reingest new logs</button>
+          <button id="logscan-trends-reset" class="btn nav-button btn-sm logscan-control-action" type="button"
+            data-bs-toggle="modal" data-bs-target="#logscan-reset-modal">Reset trends</button>
+        </div>
       </div>
     </div>
     <div class="small text-muted mt-2" id="logscan-trends-status"></div>
@@ -99,6 +127,36 @@
         <div class="border border-secondary rounded p-3 h-100">
           <h6 class="text-uppercase text-muted mb-2">Runtime Distribution</h6>
           <div id="logscan-trends-runtime" class="small text-muted">Loading runtime distribution...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-3">
+      <div class="col-lg-4" data-panel-key="imagemaid_summary">
+        <div class="border border-secondary rounded p-3 h-100">
+          <h6 class="text-uppercase text-muted mb-2">ImageMaid Summary</h6>
+          <div id="logscan-trends-imagemaid-summary" class="small text-muted">Loading ImageMaid summary...</div>
+        </div>
+      </div>
+      <div class="col-lg-4" data-panel-key="imagemaid_recovered_trend">
+        <div class="border border-secondary rounded p-3 h-100">
+          <h6 class="text-uppercase text-muted mb-2">Recovered Space by Day</h6>
+          <div id="logscan-trends-imagemaid-recovered" class="small text-muted">Loading recovered space trend...</div>
+        </div>
+      </div>
+      <div class="col-lg-4" data-panel-key="imagemaid_mode_mix">
+        <div class="border border-secondary rounded p-3 h-100">
+          <h6 class="text-uppercase text-muted mb-2">ImageMaid Runs by Mode</h6>
+          <div id="logscan-trends-imagemaid-modes" class="small text-muted">Loading mode distribution...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-3">
+      <div class="col-12" data-panel-key="imagemaid_files_trend">
+        <div class="border border-secondary rounded p-3 h-100">
+          <h6 class="text-uppercase text-muted mb-2">Files Removed by Day</h6>
+          <div id="logscan-trends-imagemaid-files" class="small text-muted">Loading removed files trend...</div>
         </div>
       </div>
     </div>
@@ -159,6 +217,7 @@
           <option value="finished_at" selected>Finished</option>
           <option value="run_time_seconds">Runtime</option>
           <option value="config_name">Config</option>
+          <option value="tool_name">Tool</option>
           <option value="config_line_count">Config lines</option>
           <option value="cache_line_count">Cache lines</option>
           <option value="command_signature">Command</option>
@@ -170,7 +229,7 @@
           <option value="library_shows">Shows</option>
           <option value="library_episodes">Episodes</option>
           <option value="library_total">Total items</option>
-          <option value="kometa_version">Kometa</option>
+          <option value="kometa_version">Version</option>
           <option value="maintenance">Maintenance</option>
           <option value="quiet_periods">Quiet periods</option>
           <option value="section_runtimes">Section runtimes</option>
@@ -244,6 +303,16 @@
                 </button>
               </th>
               <th>
+                <button type="button" class="logscan-sort-button" data-sort="tool_name"
+                  title="Sort by tool" aria-label="Sort by tool">
+                  Tool
+                  <span class="logscan-sort-icons" aria-hidden="true">
+                    <span class="logscan-sort-up"></span>
+                    <span class="logscan-sort-down"></span>
+                  </span>
+                </button>
+              </th>
+              <th>
                 <button type="button" class="logscan-sort-button" data-sort="config_line_count"
                   title="Sort by config line count" aria-label="Sort by config line count">
                   Config lines
@@ -285,8 +354,8 @@
               </th>
               <th>
                 <button type="button" class="logscan-sort-button" data-sort="kometa_version"
-                  title="Sort by Kometa version" aria-label="Sort by Kometa version">
-                  Kometa
+                  title="Sort by detected version" aria-label="Sort by detected version">
+                  Version
                   <span class="logscan-sort-icons" aria-hidden="true">
                     <span class="logscan-sort-up"></span>
                     <span class="logscan-sort-down"></span>
@@ -359,16 +428,21 @@
 
 <div class="modal fade" id="logscan-reingest-modal" tabindex="-1" aria-labelledby="logscan-reingest-title"
   aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered logscan-confirm-modal-dialog">
     <div class="modal-content bg-dark text-light border-secondary">
       <div class="modal-header">
-        <h5 class="modal-title" id="logscan-reingest-title">Reingest Logs</h5>
+        <h5 class="modal-title" id="logscan-reingest-title">Reingest New Logs</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
           aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        This will scan all <code>*meta*.log</code> files in <code>config/kometa/config/logs</code> and rebuild trends.
-        Missing people entries are deduped and saved to <code>config/cache/logscan/meta_people_missing.log</code>.
+        <p class="mb-2">This scans new or changed Quickstart-managed runtime and archived logs without clearing existing Analytics history.</p>
+        <div class="small text-muted">
+          <div>Kometa runtime logs: <code>config/kometa/config/logs</code></div>
+          <div>ImageMaid runtime logs: <code>config/imagemaid/config/logs</code></div>
+          <div>Archived logs: <code>config/cache/logscan/archive/kometa</code> and <code>config/cache/logscan/archive/imagemaid</code></div>
+          <div class="mt-2">Use <strong>Reset trends</strong> when you want a full rebuild from scratch. Missing people entries are deduped and saved to <code>config/cache/logscan/meta_people_missing.log</code>.</div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn nav-button btn-sm" data-bs-dismiss="modal">Cancel</button>
@@ -409,7 +483,7 @@
       </div>
       <div class="modal-body">
         <div id="logscan-delete-log-body">Delete this log from disk and remove it from Analytics?</div>
-        <div class="small text-muted mt-2">The live <code>meta.log</code> is never deleted from this action.</div>
+        <div class="small text-muted mt-2">Live runtime logs are never deleted from this action, including <code>config/kometa/config/logs/meta.log</code> and runtime logs in <code>config/imagemaid/config/logs</code>.</div>
         <div id="logscan-delete-log-status" class="alert alert-info d-none py-2 small mt-3 mb-0" role="status"></div>
         <div id="logscan-delete-log-success" class="alert alert-success d-none py-2 small mt-3 mb-0" role="status"></div>
         <div id="logscan-delete-log-error" class="alert alert-danger d-none py-2 small mt-3 mb-0" role="alert"></div>
@@ -433,7 +507,7 @@
       </div>
       <div class="modal-body">
         <div id="logscan-compress-log-body">Compress this archived log as <code>.log.gz</code>?</div>
-        <div class="small text-muted mt-2">Only archived plain <code>.log</code> files are compressed. The active <code>meta.log</code> is never touched from this action.</div>
+        <div class="small text-muted mt-2">Only archived plain <code>.log</code> files are compressed. Live runtime logs for Kometa and ImageMaid are never touched from this action.</div>
         <div id="logscan-compress-log-status" class="alert alert-info d-none py-2 small mt-3 mb-0" role="status"></div>
         <div id="logscan-compress-log-success" class="alert alert-success d-none py-2 small mt-3 mb-0" role="status"></div>
         <div id="logscan-compress-log-error" class="alert alert-danger d-none py-2 small mt-3 mb-0" role="alert"></div>
@@ -502,6 +576,26 @@
                     <input class="form-check-input logscan-pref-input" type="checkbox"
                       id="logscan-pref-issue-trends" data-pref-group="panels" data-pref-key="issue_trends">
                     <label class="form-check-label" for="logscan-pref-issue-trends">Issue trends</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input logscan-pref-input" type="checkbox"
+                      id="logscan-pref-imagemaid-summary" data-pref-group="panels" data-pref-key="imagemaid_summary">
+                    <label class="form-check-label" for="logscan-pref-imagemaid-summary">ImageMaid summary</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input logscan-pref-input" type="checkbox"
+                      id="logscan-pref-imagemaid-recovered-trend" data-pref-group="panels" data-pref-key="imagemaid_recovered_trend">
+                    <label class="form-check-label" for="logscan-pref-imagemaid-recovered-trend">ImageMaid recovered space by day</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input logscan-pref-input" type="checkbox"
+                      id="logscan-pref-imagemaid-files-trend" data-pref-group="panels" data-pref-key="imagemaid_files_trend">
+                    <label class="form-check-label" for="logscan-pref-imagemaid-files-trend">ImageMaid files removed by day</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input logscan-pref-input" type="checkbox"
+                      id="logscan-pref-imagemaid-mode-mix" data-pref-group="panels" data-pref-key="imagemaid_mode_mix">
+                    <label class="form-check-label" for="logscan-pref-imagemaid-mode-mix">ImageMaid runs by mode</label>
                   </div>
                   <div class="form-check form-switch">
                     <input class="form-check-input logscan-pref-input" type="checkbox"

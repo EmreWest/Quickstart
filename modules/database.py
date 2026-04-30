@@ -156,6 +156,7 @@ def get_last_used_config_name():
 def log_runs_table_create():
     return """CREATE TABLE IF NOT EXISTS log_runs (
         run_key TEXT PRIMARY KEY,
+        tool_name TEXT,
         started_at TEXT,
         finished_at TEXT,
         run_time_seconds INTEGER,
@@ -198,6 +199,7 @@ def _ensure_log_runs_columns(cursor):
         if name:
             existing.add(name)
     columns = {
+        "tool_name": "TEXT",
         "started_at": "TEXT",
         "config_name": "TEXT",
         "config_hash": "TEXT",
@@ -225,6 +227,7 @@ def save_log_run(summary, recommendations=None):
     run_key = summary.get("run_key")
     if not run_key:
         return False
+    tool_name = str(summary.get("tool_name") or "kometa").strip().lower() or "kometa"
 
     counts = summary.get("log_counts") or {}
     section_runtimes = summary.get("section_runtimes")
@@ -257,6 +260,7 @@ def save_log_run(summary, recommendations=None):
             cursor.execute(
                 """INSERT OR IGNORE INTO log_runs (
                     run_key,
+                    tool_name,
                     started_at,
                     finished_at,
                     run_time_seconds,
@@ -285,9 +289,10 @@ def save_log_run(summary, recommendations=None):
                     config_line_count,
                     cache_line_count,
                     created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     run_key,
+                    tool_name,
                     summary.get("started_at"),
                     summary.get("finished_at"),
                     summary.get("run_time_seconds"),
@@ -377,6 +382,7 @@ def _decode_log_run_row(row):
             decoded["quiet_period_summary"] = None
     decoded["maintenance_had_pause"] = bool(decoded.get("maintenance_had_pause"))
     decoded["quickstart_run_marker"] = bool(decoded.get("quickstart_run_marker"))
+    decoded["tool_name"] = str(decoded.get("tool_name") or "kometa").strip().lower() or "kometa"
     return decoded
 
 
@@ -385,18 +391,19 @@ def get_log_runs(limit=100):
         connection.row_factory = sqlite3.Row
         with closing(connection.cursor()) as cursor:
             _ensure_log_runs_columns(cursor)
-            cursor.execute(
-                """SELECT run_key, started_at, finished_at, run_time_seconds, kometa_version, kometa_newest_version,
-                          config_name, config_hash, run_command, command_signature, section_runtimes,
-                          recommendations, log_mtime, log_size, debug_count, info_count, warning_count,
-                          error_count, critical_count, trace_count, analysis_counts, library_counts,
-                          maintenance_summary, maintenance_had_pause, quiet_period_summary, quickstart_run_marker,
-                          config_line_count, cache_line_count, created_at
-                   FROM log_runs
-                   ORDER BY created_at DESC
-                   LIMIT ?""",
-                (limit,),
-            )
+            query = """SELECT run_key, tool_name, started_at, finished_at, run_time_seconds, kometa_version, kometa_newest_version,
+                              config_name, config_hash, run_command, command_signature, section_runtimes,
+                              recommendations, log_mtime, log_size, debug_count, info_count, warning_count,
+                              error_count, critical_count, trace_count, analysis_counts, library_counts,
+                              maintenance_summary, maintenance_had_pause, quiet_period_summary, quickstart_run_marker,
+                              config_line_count, cache_line_count, created_at
+                       FROM log_runs
+                       ORDER BY created_at DESC"""
+            params = ()
+            if limit is not None:
+                query += "\n                   LIMIT ?"
+                params = (limit,)
+            cursor.execute(query, params)
             rows = [_decode_log_run_row(row) for row in cursor.fetchall()]
             for row in rows:
                 row.pop("recommendations", None)
@@ -409,7 +416,7 @@ def get_log_run(run_key):
         with closing(connection.cursor()) as cursor:
             _ensure_log_runs_columns(cursor)
             cursor.execute(
-                """SELECT run_key, started_at, finished_at, run_time_seconds, kometa_version, kometa_newest_version,
+                """SELECT run_key, tool_name, started_at, finished_at, run_time_seconds, kometa_version, kometa_newest_version,
                           config_name, config_hash, run_command, command_signature, section_runtimes,
                           recommendations, log_mtime, log_size, debug_count, info_count, warning_count,
                           error_count, critical_count, trace_count, analysis_counts, library_counts,

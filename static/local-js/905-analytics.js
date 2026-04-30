@@ -23,6 +23,10 @@ $(document).ready(function () {
   const $daily = $('#logscan-trends-daily')
   const $dailyRuntime = $('#logscan-trends-daily-runtime')
   const $runtime = $('#logscan-trends-runtime')
+  const $imagemaidSummary = $('#logscan-trends-imagemaid-summary')
+  const $imagemaidRecovered = $('#logscan-trends-imagemaid-recovered')
+  const $imagemaidFiles = $('#logscan-trends-imagemaid-files')
+  const $imagemaidModes = $('#logscan-trends-imagemaid-modes')
   const $counts = $('#logscan-trends-counts')
   const $countsSeries = $('#logscan-trends-counts-series')
   const $ingest = $('#logscan-trends-ingest')
@@ -35,10 +39,14 @@ $(document).ready(function () {
   const $progressText = $('#logscan-trends-progress-text')
   const $limit = $('#logscan-trends-limit')
   const $configFilter = $('#logscan-trends-config-filter')
+  const $toolFilter = $('#logscan-trends-tool-filter')
+  const $timeRange = $('#logscan-trends-time-range')
   const $commandFilter = $('#logscan-trends-command-filter')
   const $resetFilters = $('#logscan-trends-reset-filters')
   const $dateStart = $('#logscan-trends-date-start')
   const $dateEnd = $('#logscan-trends-date-end')
+  const $customDateRow = $('#logscan-trends-custom-date-row')
+  const $dateHint = $('#logscan-trends-date-hint')
   const $runCount = $('#logscan-trends-count')
   const $reset = $('#logscan-trends-reset')
   const $reingest = $('#logscan-trends-reingest')
@@ -118,6 +126,14 @@ $(document).ready(function () {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '0'
     if (Number.isInteger(value)) return String(value)
     return value.toFixed(1).replace(/\.0$/, '')
+  }
+
+  function formatCompactNumber (value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '0'
+    const rounded = Math.round(value)
+    if (Math.abs(rounded) >= 1000000) return `${(rounded / 1000000).toFixed(1).replace(/\.0$/, '')}M`
+    if (Math.abs(rounded) >= 1000) return `${(rounded / 1000).toFixed(1).replace(/\.0$/, '')}K`
+    return String(rounded)
   }
 
   function formatBytes (value) {
@@ -211,8 +227,26 @@ $(document).ready(function () {
     if (!command) return ''
     const tokens = tokenizeCommand(command)
     if (!tokens.length) return ''
+    let baseCommand = 'kometa.py'
     let startIndex = tokens.findIndex(token => /kometa\.py$/i.test(token))
-    if (startIndex < 0) startIndex = -1
+    const imagemaidIndex = tokens.findIndex(token => /imagemaid(?:\.py)?$/i.test(token))
+    if (imagemaidIndex >= 0 && (startIndex < 0 || imagemaidIndex < startIndex)) {
+      baseCommand = 'imagemaid'
+      startIndex = imagemaidIndex
+    } else if (startIndex >= 0) {
+      baseCommand = 'kometa.py'
+    } else if (tokens[0] && !String(tokens[0]).startsWith('-')) {
+      startIndex = 0
+      if (/imagemaid(?:\.py)?$/i.test(tokens[0])) {
+        baseCommand = 'imagemaid'
+      } else if (/kometa\.py$/i.test(tokens[0])) {
+        baseCommand = 'kometa.py'
+      } else {
+        baseCommand = String(tokens[0])
+      }
+    } else {
+      startIndex = -1
+    }
     const args = tokens.slice(startIndex + 1)
     const groups = []
     for (let i = 0; i < args.length; i += 1) {
@@ -245,7 +279,7 @@ $(document).ready(function () {
       if (!bKey) return -1
       return aKey.localeCompare(bKey)
     })
-    const parts = ['kometa.py']
+    const parts = [baseCommand]
     groups.forEach(group => {
       if (group.flag) {
         if (group.value) {
@@ -263,11 +297,38 @@ $(document).ready(function () {
     return parts.join(' ').trim()
   }
 
+  function getDefaultToolFilterValue (tools) {
+    return ''
+  }
+
   function getRunCommandValue (run) {
     if (!run) return ''
     if (run.run_command) return normalizeRunCommand(run.run_command)
-    if (run.command_signature) return normalizeRunCommand(`kometa.py ${run.command_signature}`)
+    if (run.command_signature) {
+      const toolName = getRunToolName(run)
+      const baseCommand = toolName === 'imagemaid' ? 'imagemaid' : 'kometa.py'
+      return normalizeRunCommand(`${baseCommand} ${run.command_signature}`)
+    }
     return ''
+  }
+
+  function getRunToolName (run) {
+    if (!run) return 'kometa'
+    return String(run.tool_name || 'kometa').trim().toLowerCase() || 'kometa'
+  }
+
+  function getRunToolLabel (run) {
+    return getRunToolName(run) === 'imagemaid' ? 'ImageMaid' : 'Kometa'
+  }
+
+  function getImagemaidMode (run) {
+    const direct = String(run && run.imagemaid_mode ? run.imagemaid_mode : '').trim().toLowerCase()
+    if (direct) return direct
+    const signatureMatch = String(run && run.command_signature ? run.command_signature : '').match(/--mode\s+([a-z]+)/i)
+    if (signatureMatch) return String(signatureMatch[1] || '').trim().toLowerCase()
+    const commandMatch = String(run && run.run_command ? run.run_command : '').match(/--mode\s+([a-z]+)/i)
+    if (commandMatch) return String(commandMatch[1] || '').trim().toLowerCase()
+    return 'unknown'
   }
 
   function getRunDateKey (run) {
@@ -332,7 +393,7 @@ $(document).ready(function () {
     if (parts.raw > 0 && parts.sectionTotal > parts.raw + 60) {
       return `Displayed from section runtimes (${formatSeconds(parts.sectionTotal)}) because the parsed run total was ${formatSeconds(parts.raw)}. Reingest logs after this update to refresh stored run totals.`
     }
-    return 'Total run time parsed from the Kometa run summary.'
+    return 'Total run time parsed from the run summary.'
   }
 
   function getMaintenanceSummary (run) {
@@ -823,6 +884,10 @@ $(document).ready(function () {
   const PANEL_PREFS = [
     { key: 'summary', label: 'Summary + ingest health' },
     { key: 'daily_runs', label: 'Daily runs' },
+    { key: 'imagemaid_summary', label: 'ImageMaid summary' },
+    { key: 'imagemaid_recovered_trend', label: 'ImageMaid recovered space by day' },
+    { key: 'imagemaid_files_trend', label: 'ImageMaid files removed by day' },
+    { key: 'imagemaid_mode_mix', label: 'ImageMaid runs by mode' },
     { key: 'runtime_distribution', label: 'Runtime distribution' },
     { key: 'counts_mix', label: 'Log levels + cache' },
     { key: 'issue_trends', label: 'Issue trends' },
@@ -929,6 +994,37 @@ $(document).ready(function () {
       buckets[key].configs[config] = (buckets[key].configs[config] || 0) + 1
       buckets[key].cache_total += cacheLines
       buckets[key].cache_runs += 1
+    })
+    return buckets
+  }
+
+  function getImagemaidRuns (runs) {
+    return Array.isArray(runs)
+      ? runs.filter(run => getRunToolName(run) === 'imagemaid')
+      : []
+  }
+
+  function buildImagemaidDailyBuckets (runs) {
+    const buckets = {}
+    getImagemaidRuns(runs).forEach(run => {
+      const key = getRunDateKey(run)
+      if (!key) return
+      const counts = run && run.analysis_counts && typeof run.analysis_counts === 'object'
+        ? run.analysis_counts
+        : {}
+      if (!buckets[key]) {
+        buckets[key] = {
+          runs: 0,
+          recoveredBytes: 0,
+          removedFiles: 0,
+          modes: {}
+        }
+      }
+      buckets[key].runs += 1
+      buckets[key].recoveredBytes += Number.isFinite(counts.imagemaid_total_recovered_bytes) ? counts.imagemaid_total_recovered_bytes : 0
+      buckets[key].removedFiles += Number.isFinite(counts.imagemaid_total_removed_files) ? counts.imagemaid_total_removed_files : 0
+      const mode = getImagemaidMode(run)
+      buckets[key].modes[mode] = (buckets[key].modes[mode] || 0) + 1
     })
     return buckets
   }
@@ -1155,21 +1251,179 @@ $(document).ready(function () {
     }).join(''))
   }
 
+  function renderImagemaidSummary (runs) {
+    if (!$imagemaidSummary.length) return
+    const imagemaidRuns = getImagemaidRuns(runs)
+    if (!imagemaidRuns.length) {
+      $imagemaidSummary.text('No ImageMaid runs in the current filters.')
+      return
+    }
+    const totals = imagemaidRuns.reduce((acc, run) => {
+      const counts = run && run.analysis_counts && typeof run.analysis_counts === 'object'
+        ? run.analysis_counts
+        : {}
+      acc.recoveredBytes += Number.isFinite(counts.imagemaid_total_recovered_bytes) ? counts.imagemaid_total_recovered_bytes : 0
+      acc.removedFiles += Number.isFinite(counts.imagemaid_total_removed_files) ? counts.imagemaid_total_removed_files : 0
+      const mode = getImagemaidMode(run)
+      acc.modes[mode] = (acc.modes[mode] || 0) + 1
+      return acc
+    }, { recoveredBytes: 0, removedFiles: 0, modes: {} })
+    const modeEntries = Object.entries(totals.modes).sort((a, b) => b[1] - a[1])
+    const topMode = modeEntries.length ? `${modeEntries[0][0]} (${modeEntries[0][1]})` : 'n/a'
+    const avgRecovered = imagemaidRuns.length ? totals.recoveredBytes / imagemaidRuns.length : 0
+    const cards = [
+      { label: 'Runs', value: imagemaidRuns.length },
+      { label: 'Recovered', value: formatBytes(totals.recoveredBytes) },
+      { label: 'Files Removed', value: formatCompactNumber(totals.removedFiles) },
+      { label: 'Top Mode', value: topMode }
+    ]
+    const notes = [
+      `Average recovered per run: ${formatBytes(avgRecovered)}`,
+      `Modes tracked: ${modeEntries.length || 0}`
+    ]
+    $imagemaidSummary.html(`
+      <div class="logscan-kpi-grid">
+        ${cards.map(card => `
+          <div class="logscan-kpi">
+            <div class="logscan-kpi-label">${escapeHtml(card.label)}</div>
+            <div class="logscan-kpi-value">${escapeHtml(String(card.value))}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="small text-muted mt-2">${notes.map(note => `<div>${escapeHtml(note)}</div>`).join('')}</div>
+    `)
+  }
+
+  function renderImagemaidTrendChart ($el, runs, metricKey, options = {}) {
+    if (!$el.length) return
+    const imagemaidRuns = getImagemaidRuns(runs)
+    if (!imagemaidRuns.length) {
+      $el.text('No ImageMaid runs in the current filters.')
+      return
+    }
+    const buckets = buildImagemaidDailyBuckets(imagemaidRuns)
+    const days = Object.keys(buckets).sort().slice(-14)
+    if (!days.length) {
+      $el.text('No ImageMaid trend data yet.')
+      return
+    }
+    const values = days.map(day => {
+      const bucket = buckets[day] || {}
+      return Number.isFinite(bucket[metricKey]) ? bucket[metricKey] : 0
+    })
+    if (!values.some(value => value > 0)) {
+      $el.text(options.emptyText || 'No ImageMaid activity recorded for this metric yet.')
+      return
+    }
+    const maxValue = Math.max(...values, 1)
+    const rollingAvg = computeRollingAverage(values, 7)
+    const barWidth = 18
+    const gap = 10
+    const chartHeight = 120
+    const paddingTop = 6
+    const paddingBottom = 14
+    const chartAreaHeight = chartHeight - paddingTop - paddingBottom
+    const chartWidth = Math.max(1, (barWidth + gap) * days.length - gap)
+    const bars = []
+    const linePoints = []
+    days.forEach((day, index) => {
+      const x = index * (barWidth + gap)
+      const value = values[index]
+      const height = chartAreaHeight * (value / maxValue)
+      const y = paddingTop + chartAreaHeight - height
+      bars.push(`<rect x="${x}" y="${y.toFixed(2)}" width="${barWidth}" height="${height.toFixed(2)}" fill="${options.barColor || '#4cc9f0'}"></rect>`)
+      const avgValue = rollingAvg[index] || 0
+      const lineX = x + (barWidth / 2)
+      const lineY = paddingTop + (chartAreaHeight - (chartAreaHeight * (avgValue / maxValue)))
+      linePoints.push(`${lineX.toFixed(2)},${lineY.toFixed(2)}`)
+    })
+    const labels = days.map((day, index) => {
+      const displayValue = typeof options.formatValue === 'function'
+        ? options.formatValue(values[index])
+        : String(values[index])
+      return `
+        <div class="logscan-daily-label" title="${escapeHtml(day)}">
+          <span class="logscan-daily-label-date">${escapeHtml(day.slice(5))}</span>
+          <span class="logscan-daily-label-count">${escapeHtml(displayValue)}</span>
+        </div>
+      `
+    })
+    const labelStyle = `style="grid-template-columns: repeat(${days.length}, minmax(0, 1fr));"`
+    const legend = `
+      <div class="logscan-daily-legend">
+        <span class="logscan-legend-item"><span class="logscan-legend-swatch" style="background:${escapeHtml(options.barColor || '#4cc9f0')}"></span>${escapeHtml(options.seriesLabel || 'Daily total')}</span>
+        <span class="logscan-legend-item"><span class="logscan-legend-line"></span>7-day avg</span>
+      </div>
+    `
+    $el.html(`
+      <div class="logscan-library-meta">${escapeHtml(options.metaLabel || 'Last 14 days of ImageMaid activity')}</div>
+      <div class="logscan-daily-chart">
+        <svg class="logscan-daily-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" preserveAspectRatio="none">
+          ${bars.join('')}
+          <polyline class="logscan-daily-line" points="${linePoints.join(' ')}"></polyline>
+        </svg>
+        <div class="logscan-daily-labels" ${labelStyle}>
+          ${labels.join('')}
+        </div>
+      </div>
+      ${legend}
+    `)
+  }
+
+  function renderImagemaidModeMix (runs) {
+    if (!$imagemaidModes.length) return
+    const imagemaidRuns = getImagemaidRuns(runs)
+    if (!imagemaidRuns.length) {
+      $imagemaidModes.text('No ImageMaid runs in the current filters.')
+      return
+    }
+    const counts = {}
+    imagemaidRuns.forEach(run => {
+      const mode = getImagemaidMode(run)
+      counts[mode] = (counts[mode] || 0) + 1
+    })
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1])
+    if (!entries.length) {
+      $imagemaidModes.text('No ImageMaid mode data yet.')
+      return
+    }
+    const maxCount = Math.max(...entries.map(([, count]) => count), 1)
+    const rows = entries.map(([mode, count]) => {
+      const pct = maxCount ? Math.round((count / maxCount) * 100) : 0
+      return `
+        <div class="logscan-histogram-row">
+          <div class="logscan-histogram-label">${escapeHtml(mode)}</div>
+          <div class="logscan-histogram-bar-wrap">
+            <div class="logscan-histogram-bar" style="width: ${pct}%"></div>
+          </div>
+          <div class="logscan-histogram-count">${count}</div>
+        </div>
+      `
+    })
+    $imagemaidModes.html(rows.join(''))
+  }
+
   function renderArchiveStorageSummary (storage) {
     if (!$tablePolicy.length) return
-    const keepLimit = storage && Number.isFinite(storage.keep_limit)
-      ? storage.keep_limit
+    const kometaKeepLimit = storage && Number.isFinite(storage.kometa_keep_limit)
+      ? storage.kometa_keep_limit
       : (parseInt(window.QS_KOMETA_LOG_KEEP || '0', 10) || 0)
-    const retentionLabel = storage && storage.retention_label
-      ? storage.retention_label
-      : (keepLimit > 0 ? `Keep last ${keepLimit} archived logs` : 'Keep all archived logs')
+    const imagemaidKeepLimit = storage && Number.isFinite(storage.imagemaid_keep_limit)
+      ? storage.imagemaid_keep_limit
+      : (parseInt(window.QS_IMAGEMAID_LOG_KEEP || '0', 10) || 0)
+    const kometaRetentionLabel = storage && storage.kometa_retention_label
+      ? storage.kometa_retention_label
+      : (kometaKeepLimit > 0 ? `Keep last ${kometaKeepLimit} archived logs` : 'Keep all archived logs')
+    const imagemaidRetentionLabel = storage && storage.imagemaid_retention_label
+      ? storage.imagemaid_retention_label
+      : (imagemaidKeepLimit > 0 ? `Keep last ${imagemaidKeepLimit} archived logs` : 'Keep all archived logs')
     const archivedFiles = storage && Number.isFinite(storage.archived_files) ? storage.archived_files : 0
     const archivedBytes = storage && Number.isFinite(storage.archived_bytes) ? storage.archived_bytes : 0
     const extraArchivedFiles = storage && Number.isFinite(storage.extra_archived_files) ? storage.extra_archived_files : 0
     const extraArchivedBytes = storage && Number.isFinite(storage.extra_archived_bytes) ? storage.extra_archived_bytes : 0
     const fileLabel = archivedFiles === 1 ? 'file' : 'files'
     const lines = [
-      `Archived log retention: ${retentionLabel}`,
+      `Archived log retention: Kometa: ${kometaRetentionLabel} | ImageMaid: ${imagemaidRetentionLabel}`,
       `Tracked archived log storage: ${formatBytes(archivedBytes)} across ${archivedFiles} ${fileLabel}`
     ]
     if (extraArchivedFiles > 0) {
@@ -1415,7 +1669,7 @@ $(document).ready(function () {
     $tablePrev.prop('disabled', tablePage <= 1 || total === 0)
     $tableNext.prop('disabled', tablePage >= pageCount || total === 0)
     if (!total) {
-      $tableBody.html('<tr><td colspan="17" class="text-muted">No runs match the current filters.</td></tr>')
+      $tableBody.html('<tr><td colspan="18" class="text-muted">No runs match the current filters.</td></tr>')
       return
     }
     sectionDetailsByRunKey.clear()
@@ -1469,6 +1723,7 @@ $(document).ready(function () {
       }
       sectionCell += `<span class="logscan-section-summary">${escapeHtml(sectionSummary)}</span>`
       sectionCell += '</div>'
+      const toolLabel = getRunToolLabel(run)
       let kometaDisplay = run.kometa_version || 'n/a'
       if (run.kometa_version && run.kometa_newest_version && run.kometa_version !== run.kometa_newest_version) {
         kometaDisplay = `${run.kometa_version} -> ${run.kometa_newest_version}`
@@ -1530,18 +1785,19 @@ $(document).ready(function () {
             </span>
           `, 'class="logscan-select-cell"')}
           ${renderRunCardCell('Status', 'Complete runs are included in charts. Incomplete logs are shown here for investigation and file management.', escapeHtml(statusDisplay), run.is_incomplete ? 'class="text-nowrap text-warning fw-semibold"' : 'class="text-nowrap text-success fw-semibold"')}
-          ${renderRunCardCell('Started', 'Timestamp parsed from the Start Time value in the completed Kometa run summary.', startedDisplay, 'class="text-nowrap"')}
+          ${renderRunCardCell('Started', 'Timestamp parsed from the stored run start marker or run summary.', startedDisplay, 'class="text-nowrap"')}
           ${renderRunCardCell('Finished', 'Timestamp of the run finishing. Incomplete logs are shown here for investigation only and are excluded from charts.', finishedDisplay, 'class="text-nowrap"')}
           ${renderRunCardCell('Runtime', getRuntimeHelpText(run), escapeHtml(formatSeconds(runtimeParts.effective)))}
           ${renderRunCardCell('Config', 'Config name detected for the run.', escapeHtml(run.config_name || 'default'))}
+          ${renderRunCardCell('Tool', 'Tool that produced this run.', escapeHtml(toolLabel))}
           ${renderRunCardCell('Config lines', 'Non-comment lines captured from the redacted config output.', escapeHtml(String(configLineCount)))}
           ${renderRunCardCell('Cache lines', 'Number of log lines that include "from Cache".', escapeHtml(String(cacheLineCount)))}
-          ${renderRunCardCell('Command', 'Sanitized Kometa command line.', `<span class="logscan-command" title="${escapeHtml(commandTitle)}">${escapeHtml(command)}</span>`)}
+          ${renderRunCardCell('Command', 'Sanitized command line captured for the run.', `<span class="logscan-command" title="${escapeHtml(commandTitle)}">${escapeHtml(command)}</span>`)}
           ${renderRunCardCell('Counts', 'W warnings, E errors, T tracebacks, M movies, S shows, Ep episodes, Tot total library items.', `<span class="logscan-count-chip-row">${countChips}</span>`)}
-          ${renderRunCardCell('Kometa', 'Version detected for the run, plus newest version when different.', escapeHtml(kometaDisplay))}
+          ${renderRunCardCell('Version', 'Detected tool version for the run, plus newest version when different.', escapeHtml(kometaDisplay))}
           ${renderRunCardCell('Maintenance', 'Quickstart maintenance pauses recorded in meta.log for this run.', renderMaintenanceSummaryCell(run))}
-          ${renderRunCardCell('Quiet periods', 'Emphasizes the longest unexplained delay between timestamped Kometa log lines, with maintenance-related gaps available in the details view.', renderQuietPeriodCell(run))}
-          ${renderRunCardCell('Section runtimes', 'Runtime totals parsed per Kometa section.', sectionCell)}
+          ${renderRunCardCell('Quiet periods', 'Emphasizes the longest unexplained delay between timestamped run log lines, with maintenance-related gaps available in the details view.', renderQuietPeriodCell(run))}
+          ${renderRunCardCell('Section runtimes', 'Runtime totals parsed per run section when available.', sectionCell)}
           ${renderRunCardCell('Log size', 'Current on-disk size of the resolved log file when available, otherwise the ingested size.', escapeHtml(formatBytes(sizeBytes)))}
           ${renderRunCardCell('Log', 'Download the source log for this run. Archived plain logs can also be compressed, and archived logs can be deleted here.', `<div class="logscan-action-stack">${logActions.join('')}</div>`)}
           ${renderRunCardCell('Report', run.is_incomplete ? 'Open recommendations and diagnostics captured for this incomplete log.' : 'Open the recommendations recorded for the run.', `
@@ -1979,6 +2235,8 @@ $(document).ready(function () {
         return getEffectiveRunTimeSeconds(run)
       case 'config_name':
         return normalizeConfigName(run.config_name)
+      case 'tool_name':
+        return getRunToolName(run)
       case 'command_signature':
         return getRunCommandValue(run)
       case 'counts':
@@ -2097,25 +2355,42 @@ $(document).ready(function () {
     return nextValue !== selected
   }
 
-  function updateDateRangeInputs (runs, state) {
-    if (!$dateStart.length || !$dateEnd.length) return false
+  function getAvailableDateBounds (runs) {
     const dates = runs.map(run => getRunDateKey(run)).filter(Boolean).sort()
     if (!dates.length) {
+      return { minDate: '', maxDate: '' }
+    }
+    return { minDate: dates[0], maxDate: dates[dates.length - 1] }
+  }
+
+  function updateDateRangeInputs (runs, state) {
+    if (!$dateStart.length || !$dateEnd.length) return false
+    const { minDate, maxDate } = getAvailableDateBounds(runs)
+    const isCustom = state.timeRange === 'custom'
+    if (!minDate || !maxDate) {
       const hadValue = $dateStart.val() || $dateEnd.val()
       $dateStart.val('')
       $dateEnd.val('')
       $dateStart.prop('disabled', true)
       $dateEnd.prop('disabled', true)
+      if ($dateHint.length) $dateHint.text('No dated runs available for the current scope.')
       return Boolean(hadValue)
     }
-    const minDate = dates[0]
-    const maxDate = dates[dates.length - 1]
-    $dateStart.prop('disabled', false)
-    $dateEnd.prop('disabled', false)
+    $dateStart.prop('disabled', !isCustom)
+    $dateEnd.prop('disabled', !isCustom)
     $dateStart.attr('min', minDate)
     $dateStart.attr('max', maxDate)
     $dateEnd.attr('min', minDate)
     $dateEnd.attr('max', maxDate)
+    if ($dateHint.length) {
+      $dateHint.text(`Available data: ${minDate} to ${maxDate}`)
+    }
+    if (!isCustom) {
+      const hadValue = $dateStart.val() || $dateEnd.val()
+      $dateStart.val('')
+      $dateEnd.val('')
+      return Boolean(hadValue)
+    }
     let start = state.start || ''
     let end = state.end || ''
     if (!start || start < minDate || start > maxDate) start = minDate
@@ -2125,6 +2400,29 @@ $(document).ready(function () {
     $dateStart.val(start)
     $dateEnd.val(end)
     return changed
+  }
+
+  function clearDateFilters () {
+    if (!$dateStart.length || !$dateEnd.length) return
+    $dateStart.val('')
+    $dateEnd.val('')
+  }
+
+  function syncDateRangeVisibility () {
+    if (!$customDateRow.length) return
+    const isCustom = ($timeRange.val() || 'all') === 'custom'
+    $customDateRow.toggleClass('d-none', !isCustom)
+  }
+
+  function getRelativeDateRangeBounds (runs, days) {
+    const { maxDate } = getAvailableDateBounds(runs)
+    if (!maxDate) return { start: '', end: '' }
+    const endDate = new Date(`${maxDate}T00:00:00`)
+    if (Number.isNaN(endDate.getTime())) return { start: '', end: '' }
+    const startDate = new Date(endDate)
+    startDate.setDate(startDate.getDate() - Math.max(0, days - 1))
+    const start = startDate.toISOString().slice(0, 10)
+    return { start, end: maxDate }
   }
 
   function updateRunCountDisplay (filtered) {
@@ -2146,6 +2444,8 @@ $(document).ready(function () {
   function getFilterState () {
     return {
       config: $configFilter.val() || '',
+      tool: $toolFilter.val() || '',
+      timeRange: $timeRange.val() || 'all',
       command: $commandFilter.val() || '',
       library: $libraryFilter.val() || '',
       start: $dateStart.val() || '',
@@ -2154,12 +2454,23 @@ $(document).ready(function () {
   }
 
   function filterRuns (runs, state) {
+    let rangeStart = ''
+    let rangeEnd = ''
+    if (state.timeRange === 'custom') {
+      rangeStart = state.start
+      rangeEnd = state.end
+    } else if (state.timeRange === '7' || state.timeRange === '30' || state.timeRange === '90') {
+      const relative = getRelativeDateRangeBounds(runs, parseInt(state.timeRange, 10))
+      rangeStart = relative.start
+      rangeEnd = relative.end
+    }
     return runs.filter(run => {
       if (state.config && normalizeConfigName(run.config_name) !== state.config) return false
+      if (state.tool && getRunToolName(run) !== state.tool) return false
       if (state.command && getRunCommandValue(run) !== state.command) return false
-      if (state.start || state.end) {
+      if (rangeStart || rangeEnd) {
         const dateKey = getRunDateKey(run)
-        if (!isDateWithinRange(dateKey, state.start, state.end)) return false
+        if (!isDateWithinRange(dateKey, rangeStart, rangeEnd)) return false
       }
       return true
     })
@@ -2168,13 +2479,30 @@ $(document).ready(function () {
   function updateFilterOptions (state) {
     let changed = false
     changed = updateConfigFilter(filterRuns(allTableRuns, { ...state, config: '' })) || changed
+    changed = updateToolFilter(filterRuns(allTableRuns, { ...state, tool: '' })) || changed
     changed = updateCommandFilter(filterRuns(allTableRuns, { ...state, command: '' })) || changed
-    changed = updateDateRangeInputs(filterRuns(allTableRuns, { ...state, start: '', end: '' }), state) || changed
+    changed = updateDateRangeInputs(filterRuns(allTableRuns, { ...state, start: '', end: '', timeRange: 'all' }), state) || changed
     changed = updateLibraryFilter(filterRuns(allRuns, { ...state, library: '' })) || changed
     return changed
   }
 
+  function updateToolFilter (runs) {
+    if (!$toolFilter.length) return false
+    const selected = $toolFilter.val() || ''
+    const tools = Array.from(new Set(runs.map(run => getRunToolName(run)))).sort()
+    const options = ['<option value="">All apps</option>']
+    tools.forEach(tool => {
+      const label = tool === 'imagemaid' ? 'ImageMaid' : 'Kometa'
+      options.push(`<option value="${escapeHtml(tool)}">${escapeHtml(label)}</option>`)
+    })
+    $toolFilter.html(options.join(''))
+    const nextValue = selected && tools.includes(selected) ? selected : getDefaultToolFilterValue(tools)
+    $toolFilter.val(nextValue)
+    return nextValue !== selected
+  }
+
   function applyFiltersAndRender () {
+    syncDateRangeVisibility()
     let state = getFilterState()
     for (let i = 0; i < 2; i += 1) {
       const changed = updateFilterOptions(state)
@@ -2187,6 +2515,20 @@ $(document).ready(function () {
     updateRunCountDisplay(filtered)
     renderSummary(filtered)
     renderDaily(filtered)
+    renderImagemaidSummary(filtered)
+    renderImagemaidTrendChart($imagemaidRecovered, filtered, 'recoveredBytes', {
+      barColor: '#43aa8b',
+      seriesLabel: 'Recovered space',
+      formatValue: value => formatBytes(value),
+      metaLabel: 'Daily total recovered space from ImageMaid runs'
+    })
+    renderImagemaidTrendChart($imagemaidFiles, filtered, 'removedFiles', {
+      barColor: '#f9c74f',
+      seriesLabel: 'Files removed',
+      formatValue: value => formatCompactNumber(value),
+      metaLabel: 'Daily total files removed by ImageMaid'
+    })
+    renderImagemaidModeMix(filtered)
     renderRuntimeDistribution(filtered)
     renderCountsMix(filtered)
     renderIssueTrends(filtered)
@@ -2234,7 +2576,7 @@ $(document).ready(function () {
       `Errors: ${errors}`
     ]
     if (state.current_file) {
-      pieces.unshift(`Processing: ${state.current_file}`)
+      pieces.unshift(`Processing: ${formatProcessingFileLabel(state.current_file)}`)
     }
     if ($progressText.length) {
       $progressText.text(pieces.join(' | '))
@@ -2245,6 +2587,16 @@ $(document).ready(function () {
     if (!modalEl) return
     const instance = bootstrap.Modal.getInstance(modalEl)
     if (instance) instance.hide()
+  }
+
+  function formatProcessingFileLabel (value) {
+    const text = String(value || '').trim()
+    if (!text) return ''
+    if (text.length <= 96) return text
+    const extMatch = text.match(/(\.log(?:\.gz)?)$/i)
+    const ext = extMatch ? extMatch[1] : ''
+    const suffixLength = ext ? Math.max(24, ext.length + 20) : 24
+    return `${text.slice(0, 56)}…${text.slice(-suffixLength)}`
   }
 
   function setButtonSpinner ($button, text) {
@@ -2287,6 +2639,7 @@ $(document).ready(function () {
     $tablePrev.prop('disabled', disabled || tablePage <= 1 || currentTableRuns.length === 0)
     $tableNext.prop('disabled', disabled || tablePage >= Math.max(1, Math.ceil(currentTableRuns.length / getTablePageSize())) || currentTableRuns.length === 0)
     $configFilter.prop('disabled', disabled)
+    $toolFilter.prop('disabled', disabled)
     $commandFilter.prop('disabled', disabled)
     $dateStart.prop('disabled', disabled)
     $dateEnd.prop('disabled', disabled)
@@ -2484,6 +2837,45 @@ $(document).ready(function () {
     return escapeHtml(message).replaceAll('\n', '<br>')
   }
 
+  function buildImagemaidDetailsBlock (run) {
+    if (!run || getRunToolName(run) !== 'imagemaid') return ''
+    const counts = run.analysis_counts && typeof run.analysis_counts === 'object' ? run.analysis_counts : {}
+    const modeMatch = String(run.command_signature || '').match(/--mode\s+([a-z]+)/i)
+    const mode = modeMatch ? modeMatch[1].toLowerCase() : 'report'
+    const operations = []
+    if (counts.imagemaid_database_seen) operations.push('Database')
+    if (counts.imagemaid_photo_transcoder_enabled) operations.push('PhotoTranscoder')
+    if (counts.imagemaid_empty_trash_enabled) operations.push('Empty Trash')
+    if (counts.imagemaid_clean_bundles_enabled) operations.push('Clean Bundles')
+    if (counts.imagemaid_optimize_db_enabled) operations.push('Optimize DB')
+    const facts = [
+      `Mode: ${escapeHtml(mode)}`,
+      `Completion: ${escapeHtml(String(run.completion_reason || (run.is_incomplete ? 'unknown_incomplete' : 'completed')).replaceAll('_', ' '))}`,
+      `Operations: ${escapeHtml(operations.length ? operations.join(', ') : 'None detected')}`,
+      `Database download: ${counts.imagemaid_database_downloaded_new ? 'Downloaded new database' : (counts.imagemaid_database_download_failed ? 'Failed to download database' : 'No download recorded')}`,
+      `Restore directory files found: ${escapeHtml(String(counts.imagemaid_restore_found_files || 0))}`,
+      `Restore directory files removed: ${escapeHtml(String(counts.imagemaid_restore_removed_files || 0))}`,
+      `Restore directory bytes recovered: ${escapeHtml(formatBytes(counts.imagemaid_restore_recovered_bytes || 0))}`,
+      `PhotoTranscoder files found: ${escapeHtml(String(counts.imagemaid_photo_found_files || 0))}`,
+      `PhotoTranscoder files removed: ${escapeHtml(String(counts.imagemaid_photo_removed_files || 0))}`,
+      `PhotoTranscoder bytes recovered: ${escapeHtml(formatBytes(counts.imagemaid_photo_recovered_bytes || 0))}`,
+      `Total files removed: ${escapeHtml(String(counts.imagemaid_total_removed_files || 0))}`,
+      `Total bytes recovered: ${escapeHtml(formatBytes(counts.imagemaid_total_recovered_bytes || 0))}`
+    ]
+    const sectionLines = buildSectionDetails(run.section_runtimes, getRunTimeParts(run).effective)
+    if (sectionLines.length) {
+      facts.push(`Parsed timings: ${escapeHtml(sectionLines.join(' | '))}`)
+    }
+    return `
+      <div class="mb-3">
+        <div class="fw-semibold mb-1">ImageMaid Details</div>
+        <div class="small text-muted">
+          ${facts.map(line => `<div>${line}</div>`).join('')}
+        </div>
+      </div>
+    `
+  }
+
   function showRunDetails (runKey) {
     if (!runKey) return
     if ($runDetailsBody.length) {
@@ -2504,10 +2896,11 @@ $(document).ready(function () {
           }
           return
         }
+        const detailsBlock = buildImagemaidDetailsBlock(data && data.run)
         const recs = Array.isArray(data.recommendations) ? data.recommendations : []
         if (!recs.length) {
           if ($runDetailsBody.length) {
-            $runDetailsBody.text('No recommendations recorded for this run.')
+            $runDetailsBody.html(detailsBlock || 'No recommendations recorded for this run.')
           }
           return
         }
@@ -2522,7 +2915,7 @@ $(document).ready(function () {
           `
         })
         if ($runDetailsBody.length) {
-          $runDetailsBody.html(blocks.join(''))
+          $runDetailsBody.html(`${detailsBlock}${blocks.join('')}`)
         }
       })
       .catch(() => {
@@ -2686,9 +3079,8 @@ $(document).ready(function () {
 
   function fetchRuns (options = {}) {
     const suppressStatus = options && options.suppressStatus
-    const rawLimit = String($limit.val() || '25').toLowerCase()
-    const parsed = parseInt(rawLimit, 10)
-    const safeLimit = Number.isFinite(parsed) ? parsed : 25
+    const rawLimit = String($limit.val() || '500').toLowerCase()
+    const safeLimit = rawLimit === 'all' ? 'all' : (Number.isFinite(parseInt(rawLimit, 10)) ? parseInt(rawLimit, 10) : 500)
     if (!suppressStatus) updateStatus('Loading trends...')
     fetch(`/logscan/trends?limit=${safeLimit}`)
       .then(res => res.json())
@@ -2732,7 +3124,7 @@ $(document).ready(function () {
         if ($tablePageInfo.length) $tablePageInfo.text('No rows')
         $tablePrev.prop('disabled', true)
         $tableNext.prop('disabled', true)
-        $tableBody.html('<tr><td colspan="17" class="text-muted">Unable to load runs.</td></tr>')
+        $tableBody.html('<tr><td colspan="18" class="text-muted">Unable to load runs.</td></tr>')
         updateSelectionSummary()
       })
   }
@@ -2963,6 +3355,16 @@ $(document).ready(function () {
     tablePage = 1
     loadPreferences().then(() => applyFiltersAndRender())
   })
+  $toolFilter.on('change', function () {
+    tablePage = 1
+    clearDateFilters()
+    applyFiltersAndRender()
+  })
+  $timeRange.on('change', function () {
+    tablePage = 1
+    clearDateFilters()
+    applyFiltersAndRender()
+  })
   $commandFilter.on('change', function () {
     tablePage = 1
     applyFiltersAndRender()
@@ -2994,10 +3396,11 @@ $(document).ready(function () {
     $limit.val('500')
     tablePage = 1
     $configFilter.val('')
+    $toolFilter.val('')
+    $timeRange.val('all')
     $commandFilter.val('')
     $libraryFilter.val('')
-    $dateStart.val('')
-    $dateEnd.val('')
+    clearDateFilters()
     fetchRuns({ suppressStatus: true })
   })
   if (preferencesModalEl) {

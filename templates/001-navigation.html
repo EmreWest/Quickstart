@@ -3,7 +3,10 @@
   {% set qs_is_docker = version_info and version_info.running_on and ('Docker' in version_info.running_on) %}
   {% set hide_step_nav = page_info.get('hide_step_nav', False) %}
   {% set required_keys = required_keys if required_keys is defined else ['001-start', '010-plex', '020-tmdb', '025-libraries', '150-settings'] %}
-  {% set review_keys = review_keys if review_keys is defined else ['900-final', '905-analytics', '910-sponsor'] %}
+  {% set review_keys = review_keys if review_keys is defined else ['900-kometa', '905-analytics', '910-sponsor', '915-imagemaid'] %}
+  {% set app_keys = ['900-kometa', '915-imagemaid'] %}
+  {% set insight_keys = ['905-analytics'] %}
+  {% set other_keys = ['910-sponsor'] %}
   {% if optional_keys is defined %}
   {% set optional_ns = namespace(keys=optional_keys) %}
   {% else %}
@@ -18,7 +21,9 @@
   {% set current_template = page_info['template_name'] %}
   {% set required_open = current_template in required_keys %}
   {% set optional_open = current_template in optional_ns.keys %}
-  {% set review_open = current_template in review_keys %}
+  {% set apps_open = current_template in app_keys %}
+  {% set insights_open = current_template in insight_keys %}
+  {% set other_open = current_template in other_keys %}
   {% set tautulli_reasons = tautulli_requirement_reasons if tautulli_requirement_reasons is defined else [] %}
   {% set omdb_reasons = omdb_requirement_reasons if omdb_requirement_reasons is defined else [] %}
   {% set mdblist_reasons = mdblist_requirement_reasons if mdblist_requirement_reasons is defined else [] %}
@@ -166,10 +171,30 @@
                 </div>
               </div>
             </div>
+            <details class="qs-step-group qs-active-work-group" data-qs-active-work>
+              <summary class="qs-step-group-summary" title="Active Work" aria-label="Background jobs and active process work">
+                <span>Active Work</span>
+                <span class="qs-step-group-summary-right">
+                  <span class="qs-step-group-state qs-step-group-state--ok" data-qs-active-work-indicator>
+                    <i class="bi bi-check-lg" aria-hidden="true"></i>
+                  </span>
+                  <span class="qs-active-work-count" data-qs-active-work-count>Idle</span>
+                  <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                </span>
+              </summary>
+              <div class="qs-active-work-panel">
+                <div class="qs-active-work-state" data-qs-active-work-state>No active work.</div>
+                <div class="qs-active-work-list" data-qs-active-work-list>
+                  <div class="qs-active-work-empty" data-qs-active-work-empty>No active work.</div>
+                </div>
+              </div>
+            </details>
             <div class="qs-step-groups">
-              {{ workspace.step_group('Required', 'required', template_list, required_keys, page_info, step_statuses, section_statuses, open_state=required_open) }}
-              {{ workspace.step_group('Optional', 'optional', template_list, optional_ns.keys, page_info, step_statuses, section_statuses, open_state=optional_open) }}
-              {{ workspace.step_group('Review', 'review', template_list, review_keys, page_info, step_statuses, section_statuses, open_state=review_open) }}
+              {{ workspace.step_group('Setup', 'required', template_list, required_keys, page_info, step_statuses, section_statuses, open_state=required_open) }}
+              {{ workspace.step_group('Optional Services', 'optional', template_list, optional_ns.keys, page_info, step_statuses, section_statuses, open_state=optional_open) }}
+              {{ workspace.step_group('Apps', 'apps', template_list, app_keys, page_info, step_statuses, section_statuses, open_state=apps_open) }}
+              {{ workspace.step_group('Insights', 'insights', template_list, insight_keys, page_info, step_statuses, section_statuses, open_state=insights_open) }}
+              {{ workspace.step_group('Other', 'other', template_list, other_keys, page_info, step_statuses, section_statuses, open_state=other_open) }}
             </div>
             <div class="qs-step-list qs-step-list--compact" role="list">
               {% for file, name in template_list %}
@@ -193,36 +218,37 @@
             <div class="qs-main-page-topline">
               <div class="qs-main-page-eyebrow">Quickstart</div>
               <div class="qs-main-page-status-pills">
-                <a id="qs-running-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-final') }}"
-                  title="Open Final Validation">
+                <a id="qs-running-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-kometa') }}"
+                  title="Open Kometa">
                   <span class="badge rounded-pill text-bg-success px-3 py-2">
                     <i class="bi bi-play-circle me-1"></i> Kometa running
                   </span>
                 </a>
-                <a id="qs-maintenance-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-final') }}"
-                  title="Open Final Validation">
+                <a id="qs-maintenance-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-kometa') }}"
+                  title="Open Kometa">
                   <span class="badge rounded-pill text-bg-warning text-dark px-3 py-2">
                     <i class="bi bi-pause-circle me-1"></i> Kometa paused for Plex maintenance
                   </span>
                 </a>
-                <a id="qs-maintenance-unavailable-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-final') }}"
-                  title="Open Final Validation">
+                <a id="qs-maintenance-unavailable-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-kometa') }}"
+                  title="Open Kometa">
                   <span class="badge rounded-pill text-bg-warning text-dark px-3 py-2">
                     <i class="bi bi-exclamation-triangle me-1"></i> Plex maintenance window unavailable
                   </span>
                 </a>
-                <a id="qs-queued-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-final') }}"
-                  title="Open Final Validation">
+                <a id="qs-queued-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='900-kometa') }}"
+                  title="Open Kometa">
                   <span class="badge rounded-pill text-bg-info text-dark px-3 py-2">
                     <i class="bi bi-hourglass-split me-1"></i> Kometa start queued
                   </span>
                 </a>
-                <a id="qs-logscan-reingest-badge" class="d-none qs-header-status-pill" href="{{ url_for('logscan_trends_page') }}"
-                  title="Open Analytics">
-                  <span class="badge rounded-pill text-bg-primary px-3 py-2">
-                    <i class="bi bi-arrow-repeat me-1"></i> Analytics reingest running
+                <a id="qs-imagemaid-running-badge" class="d-none qs-header-status-pill" href="{{ url_for('step', name='915-imagemaid') }}"
+                  title="Open ImageMaid">
+                  <span class="badge rounded-pill text-bg-success px-3 py-2">
+                    <i class="bi bi-images me-1"></i> ImageMaid running
                   </span>
                 </a>
+                <div class="qs-background-job-pill-list" data-qs-background-job-pills></div>
               </div>
             </div>
             <h2 class="qs-main-page-title">{{ page_info['title'] }}</h2>
@@ -444,6 +470,11 @@
                       <label class="form-label" for="quickstart-settings-log-keep">Kometa Log Retention</label>
                       <input type="number" class="form-control" id="quickstart-settings-log-keep" min="0" step="1" inputmode="numeric">
                       <div class="form-text">0 keeps all archived <code>meta*.log</code> files.</div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label" for="quickstart-settings-imagemaid-log-keep">ImageMaid Log Retention</label>
+                      <input type="number" class="form-control" id="quickstart-settings-imagemaid-log-keep" min="0" step="1" inputmode="numeric">
+                      <div class="form-text">0 keeps all archived <code>imagemaid*.log</code> files.</div>
                     </div>
                     <div class="form-check form-switch mb-2">
                       <input class="form-check-input" type="checkbox" id="quickstart-settings-debug">
