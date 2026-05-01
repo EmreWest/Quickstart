@@ -1313,6 +1313,58 @@ def test_analyze_imagemaid_log_content_uses_first_runtime_timestamp_for_started_
     assert summary["started_at"] == "2026-04-29 15:08:28"
     assert summary["finished_at"] == "2026-04-29 15:08:35"
     assert summary["run_time_seconds"] == 5
+    assert summary["config_name"] == "unknown"
+
+
+def test_analyze_imagemaid_log_content_infers_saved_config_name(qs_module, isolated_config_dir):
+    qs_module.database.save_section_data(
+        name="demo_report",
+        section="imagemaid",
+        validated=True,
+        user_entered=True,
+        data={
+            "imagemaid": {
+                "plex_path": "P:\\plex",
+                "mode": "report",
+                "photo_transcoder": True,
+                "local_db": True,
+                "timeout": "600",
+                "sleep": "60",
+            }
+        },
+    )
+    qs_module.database.save_section_data(
+        name="demo_restore",
+        section="imagemaid",
+        validated=True,
+        user_entered=True,
+        data={
+            "imagemaid": {
+                "plex_path": "P:\\plex",
+                "mode": "restore",
+                "photo_transcoder": True,
+                "local_db": True,
+                "timeout": "600",
+                "sleep": "60",
+            }
+        },
+    )
+
+    result = qs_module._analyze_imagemaid_log_content(
+        "\n".join(
+            [
+                "[2026-04-29 21:53:15,701] [imagemaid.py:93]           [INFO]     |     Version: 1.1.1-build8 (Python 3.12.1)                                                          |",
+                "[2026-04-29 21:53:16,716] [imagemaid.py:93]           [DEBUG]    | Run Command: C:\\Quickstart\\config\\imagemaid\\imagemaid.py --url (redacted) --token (redacted) --plex P:\\plex --mode report --photo-transcoder --local --timeout 600 --sleep 60 |",
+                "[2026-04-29 21:53:16,726] [imagemaid.py:118]          [INFO]     | Running in Report Mode with PhotoTrancoder set to True                                              |",
+                "[2026-04-29 21:53:35,001] [imagemaid.py:453]          [INFO]     |======================================== ImageMaid Finished ========================================|",
+                "[2026-04-29 21:53:35,002] [imagemaid.py:453]          [INFO]     | Total Runtime      | 0:00:19                                                                       |",
+            ]
+        ),
+        log_path="imagemaid.log",
+    )
+
+    assert result is not None
+    assert result["summary"]["config_name"] == "demo_report"
 
 
 def test_logscan_reingest_archives_completed_imagemaid_runtime_log_into_imagemaid_archive(client, isolated_config_dir, monkeypatch, qs_module):
@@ -1382,6 +1434,57 @@ def test_logscan_trends_auto_ingests_completed_imagemaid_live_log(client, isolat
     assert payload["runs"][0]["config_name"] == "demo"
     assert not runtime_log.exists()
     assert len(list(archive_dir.glob("imagemaid-*.log.gz"))) == 1
+
+
+def test_ingest_completed_live_logs_caches_unchanged_incomplete_live_kometa_log(client, isolated_config_dir, monkeypatch, qs_module):
+    kometa_root = isolated_config_dir / "kometa"
+    log_dir = kometa_root / "config" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    runtime_log = log_dir / "meta.log"
+    runtime_log.write_text("incomplete log\n", encoding="utf-8")
+
+    cache = {"version": 1, "logs": {}}
+    analyze_calls = {"count": 0}
+
+    class _IncompleteAnalyzer:
+        def analyze_content(self, content, log_path=None, include_people_scan=False):
+            analyze_calls["count"] += 1
+            return {
+                "summary": {
+                    "run_key": "run-incomplete-live-1",
+                    "tool_name": "kometa",
+                    "run_complete": False,
+                    "config_name": "demo",
+                    "run_command": "python kometa.py --config config/demo.yml",
+                    "log_counts": {},
+                    "analysis_counts": {},
+                    "library_counts": {},
+                    "section_runtimes": {},
+                    "maintenance_summary": {},
+                    "quiet_period_summary": {},
+                    "quickstart_run_marker": False,
+                    "created_at": "2026-04-30T18:00:00Z",
+                    "log_size": runtime_log.stat().st_size,
+                },
+                "recommendations": [],
+            }
+
+    monkeypatch.setattr(qs_module.helpers, "get_kometa_root_path", lambda: kometa_root)
+    monkeypatch.setattr(qs_module.helpers, "is_kometa_running", lambda: False)
+    monkeypatch.setattr(qs_module, "_archive_finished_live_meta_log_if_idle", lambda *args, **kwargs: None)
+    monkeypatch.setattr(qs_module.logscan, "LogscanAnalyzer", _IncompleteAnalyzer)
+    monkeypatch.setattr(qs_module, "_load_logscan_ingest_cache", lambda: copy.deepcopy(cache))
+    monkeypatch.setattr(qs_module, "_save_logscan_ingest_cache", lambda value: (cache.clear(), cache.update(copy.deepcopy(value))))
+
+    first = qs_module._ingest_completed_live_logs("kometa")
+    assert first == {"ingested": 0, "archived": 0}
+    assert str(runtime_log.resolve()) in cache["logs"]
+    assert cache["logs"][str(runtime_log.resolve())]["run_complete"] is False
+    assert analyze_calls["count"] == 1
+
+    second = qs_module._ingest_completed_live_logs("kometa")
+    assert second == {"ingested": 0, "archived": 0}
+    assert analyze_calls["count"] == 1
 
 
 def test_logscan_reingest_reset_false_scans_only_delta_files(client, isolated_config_dir, monkeypatch, qs_module):
