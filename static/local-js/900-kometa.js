@@ -17,6 +17,7 @@ let kometaPollingStarted = false
 let autoScrollEnabled = true
 let tailSize = '2000'
 let KOMETA_STATUS = null
+let KOMETA_PENDING_START = false
 let logPollingPaused = false
 let logFilter = ''
 let lastLogText = ''
@@ -28,6 +29,8 @@ let finalLogscanAnalyzeTriggered = false
 let lastRunProgressPayload = null
 let logscanAnalyzeInFlight = false
 let runProgressInFlight = false
+let activeRunCommandOverride = null
+let activeRunCommandMode = null
 const KOMETA_BRANCH_OVERRIDE_STORAGE_KEY = 'qs-kometa-branch-override'
 let kometaUpdatePollInterval = null
 let kometaUpdateJobId = null
@@ -774,27 +777,78 @@ $(document).ready(function () {
     $('#copy-command').removeClass('d-none')
   }
 
+  function getRunCommandModeLabel (mode) {
+    const normalized = String(mode || 'current').trim().toLowerCase()
+    if (normalized === 'recovery') return 'Recovery Command'
+    if (normalized === 'logged') return 'Last Logged Command'
+    return 'Command'
+  }
+
+  function getRunCommandModeBadgeLabel (mode) {
+    const normalized = String(mode || 'current').trim().toLowerCase()
+    if (normalized === 'recovery') return 'Recovery Active'
+    if (normalized === 'logged') return 'Logged Active'
+    return 'Current Active'
+  }
+
+  function getRunCommandModeBadgeClass (mode) {
+    const normalized = String(mode || 'current').trim().toLowerCase()
+    if (normalized === 'recovery') return 'text-bg-warning'
+    if (normalized === 'logged') return 'text-bg-secondary'
+    return 'text-bg-primary'
+  }
+
+  function applyActiveRunCommandState (command, mode) {
+    const normalizedMode = String(mode || 'current').trim().toLowerCase() || 'current'
+    activeRunCommandOverride = command || null
+    activeRunCommandMode = normalizedMode
+
+    if (command) {
+      $('#run-command-output').text(command)
+    }
+
+    $('#run-command-label').text(getRunCommandModeLabel(normalizedMode))
+    $('#run-command-active-badge')
+      .removeClass('d-none text-bg-warning text-bg-secondary text-bg-primary')
+      .addClass(getRunCommandModeBadgeClass(normalizedMode))
+      .text(getRunCommandModeBadgeLabel(normalizedMode))
+  }
+
+  function clearActiveRunCommandState () {
+    activeRunCommandOverride = null
+    activeRunCommandMode = null
+    $('#run-command-label').text('Command')
+    $('#run-command-active-badge')
+      .addClass('d-none')
+      .removeClass('text-bg-warning text-bg-secondary text-bg-primary')
+      .text('Recovery Active')
+  }
+
   function updateRunNowState () {
     const $runNow = $('#run-now')
     if (!$runNow.length) {
       updateRunCommandHeaderBadge()
+      syncIncompleteRunActions()
       return
     }
 
     if (!showYAML || KOMETA_VALIDATION_IN_PROGRESS || KOMETA_UPDATING || KOMETA_STATUS === 'running' || !KOMETA_VALIDATED) {
       $runNow.prop('disabled', true)
       updateRunCommandHeaderBadge()
+      syncIncompleteRunActions()
       return
     }
 
     if (!isRunCommandValid()) {
       $runNow.prop('disabled', true)
       updateRunCommandHeaderBadge()
+      syncIncompleteRunActions()
       return
     }
 
     $runNow.prop('disabled', false)
     updateRunCommandHeaderBadge()
+    syncIncompleteRunActions()
   }
 
   function buildCommand () {
@@ -915,7 +969,10 @@ $(document).ready(function () {
       }
     }
 
-    runCmdOutput.text(cli)
+    runCmdOutput.data('built-command', cli)
+    if (!activeRunCommandOverride) {
+      runCmdOutput.text(cli)
+    }
     updateRunNowState()
     syncFinalAccordionRollups()
     return true
@@ -1611,6 +1668,131 @@ $(document).ready(function () {
       .catch(() => showToast('error', 'Copy failed. Please copy manually.'))
   })
 
+  function getCurrentRunCommand () {
+    return $('#run-command-output').text().trim()
+  }
+
+  function getRecoveryRunCommand () {
+    return $('#recovery-command-output').text().trim()
+  }
+
+  function syncIncompleteRunActions () {
+    const $runRecovery = $('#run-recovery-command')
+    if (!$runRecovery.length) return
+
+    const $incompleteAlert = $('#incomplete-run-alert')
+    const recoveryCommand = getRecoveryRunCommand()
+    const alertVisible = $incompleteAlert.length > 0 && !$incompleteAlert.hasClass('d-none')
+    const recoveryRunnable = Boolean(recoveryCommand) &&
+      alertVisible &&
+      !KOMETA_VALIDATION_IN_PROGRESS &&
+      !KOMETA_UPDATING &&
+      !KOMETA_PENDING_START &&
+      KOMETA_STATUS !== 'running'
+
+    $runRecovery.toggleClass('d-none', !alertVisible)
+    $runRecovery.prop('disabled', !recoveryRunnable)
+    if (recoveryRunnable) {
+      $runRecovery.removeAttr('title')
+    } else if (!alertVisible) {
+      $runRecovery.attr('title', 'Recovery actions are only available when an incomplete-run recovery command is visible.')
+    } else if (KOMETA_VALIDATION_IN_PROGRESS) {
+      $runRecovery.attr('title', 'Wait for Kometa validation to finish before starting a recovery run.')
+    } else if (KOMETA_UPDATING) {
+      $runRecovery.attr('title', 'Wait for the Kometa update to finish before starting a recovery run.')
+    } else if (KOMETA_PENDING_START) {
+      $runRecovery.attr('title', 'A Kometa start is already queued for the next Plex maintenance window.')
+    } else if (KOMETA_STATUS === 'running') {
+      $runRecovery.attr('title', 'Kometa is already running.')
+    } else {
+      $runRecovery.attr('title', 'No recovery command is available for this incomplete run.')
+    }
+  }
+
+  function startKometaCommand (command, opts = {}) {
+    const startMode = opts.startMode || 'current'
+    const requireValidated = opts.requireValidated !== false
+    const startMessage = opts.startMessage || 'Starting Kometa...\n'
+
+    if (KOMETA_UPDATING) {
+      showToast('warning', 'Kometa is updating. Please wait for it to finish before running.')
+      return
+    }
+
+    if (KOMETA_VALIDATION_IN_PROGRESS) {
+      showToast('info', 'Kometa validation is still running. Please wait.')
+      return
+    }
+
+    if (requireValidated && !KOMETA_VALIDATED) {
+      showToast('warning', 'Kometa has not been validated yet.')
+      return
+    }
+
+    if (!command || command.startsWith('⚠️')) {
+      showToast('error', 'Cannot run invalid command.')
+      return
+    }
+
+    $('#run-now').prop('disabled', true)
+    $('#run-now-label').text('Running...')
+    $('#run-recovery-command').prop('disabled', true)
+    $('#stop-now').removeClass('d-none')
+    $('#run-output').removeClass('d-none')
+    $('#run-output-log').text(startMessage)
+
+    fetch('/start-kometa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, start_mode: startMode })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          clearActiveRunCommandState()
+          try { buildCommand() } catch (_) {}
+          $('#run-output-log').text(`❌ ${data.error}`)
+          $('#run-now').prop('disabled', false)
+          $('#run-now-label').text('Run Now')
+          $('#stop-now').addClass('d-none')
+          syncIncompleteRunActions()
+          return
+        }
+
+        if (data.status === 'queued') {
+          applyActiveRunCommandState(command, startMode)
+          KOMETA_PENDING_START = true
+          const windowLabel = data.maintenance_window ? ` (${data.maintenance_window})` : ''
+          const nowLabel = (typeof window.QS_formatTimestamp === 'function') ? window.QS_formatTimestamp() : new Date().toLocaleString()
+          const message = `Plex maintenance active${windowLabel} at ${nowLabel}. Kometa will start automatically when it ends.`
+          showToast('warning', message)
+          $('#run-output-log').text(`${message}\n`)
+          $('#run-now').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i> Waiting...')
+          $('#stop-now').addClass('d-none')
+          if (kometaStatusInterval) clearInterval(kometaStatusInterval)
+          kometaStatusInterval = setInterval(checkKometaStatus, 5000)
+          syncIncompleteRunActions()
+          return
+        }
+
+        applyActiveRunCommandState(command, startMode)
+
+        setTimeout(() => {
+          kometaPollingStarted = false
+          startPollingIfNeeded()
+        }, 5500)
+      })
+      .catch(() => {
+        clearActiveRunCommandState()
+        try { buildCommand() } catch (_) {}
+        $('#run-output-log').append('\n⚠️ Failed to start Kometa.')
+        $('#run-now').prop('disabled', false)
+        $('#run-now-label').text('Run Now')
+        $('#stop-now').addClass('d-none')
+        syncIncompleteRunActions()
+      })
+  }
+
   function hideRunCommandSectionUntilValidated () {
     const accordion = $('#run-command-output-accordion')
     accordion.removeClass('d-none')
@@ -1895,6 +2077,16 @@ $(document).ready(function () {
     container.classList.remove('d-none')
   }
 
+  function clearRunProgress (resetCache = false) {
+    const container = document.getElementById('run-progress')
+    if (container) {
+      container.classList.add('d-none')
+    }
+    if (resetCache) {
+      lastRunProgressPayload = null
+    }
+  }
+
   function fetchRunProgress () {
     if (runProgressInFlight) return Promise.resolve(null)
     runProgressInFlight = true
@@ -1905,22 +2097,20 @@ $(document).ready(function () {
       })
       .then(data => {
         if (!data) {
-          if (lastRunProgressPayload) {
+          if (KOMETA_STATUS === 'running' && lastRunProgressPayload) {
             renderRunProgress(lastRunProgressPayload)
           } else {
-            const container = document.getElementById('run-progress')
-            if (container) container.classList.add('d-none')
+            clearRunProgress(false)
           }
           return
         }
         renderRunProgress(data)
       })
       .catch(() => {
-        if (lastRunProgressPayload) {
+        if (KOMETA_STATUS === 'running' && lastRunProgressPayload) {
           renderRunProgress(lastRunProgressPayload)
         } else {
-          const container = document.getElementById('run-progress')
-          if (container) container.classList.add('d-none')
+          clearRunProgress(false)
         }
       })
       .finally(() => {
@@ -3069,67 +3259,26 @@ $(document).ready(function () {
   }
 
   $('#run-now').on('click', function () {
-    if (KOMETA_UPDATING) {
-      showToast('warning', 'Kometa is updating. Please wait for it to finish before running.')
-      return
-    }
-
-    if (KOMETA_VALIDATION_IN_PROGRESS) {
-      showToast('info', 'Kometa validation is still running. Please wait.')
-      return
-    }
-
-    if (!KOMETA_VALIDATED) {
-      showToast('warning', 'Kometa has not been validated yet.')
-      return
-    }
-
-    const command = $('#run-command-output').text().trim()
-    if (!command || command.startsWith('⚠️')) {
-      showToast('error', 'Cannot run invalid command.')
-      return
-    }
-
-    $('#run-now').prop('disabled', true)
-    $('#run-now-label').text('Running...')
-    $('#stop-now').removeClass('d-none') // SHOW stop button here
-    $('#run-output').removeClass('d-none')
-    $('#run-output-log').text('Starting Kometa...\n')
-
-    fetch('/start-kometa', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command })
+    startKometaCommand(getCurrentRunCommand(), {
+      startMode: 'current',
+      requireValidated: true,
+      startMessage: 'Starting Kometa...\n'
     })
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          $('#run-output-log').text(`❌ ${data.error}`)
-          $('#run-now').prop('disabled', false)
-          $('#run-now-label').text('Run Now')
-          $('#stop-now').addClass('d-none')
-          return
-        }
+  })
 
-        if (data.status === 'queued') {
-          const windowLabel = data.maintenance_window ? ` (${data.maintenance_window})` : ''
-          const nowLabel = (typeof window.QS_formatTimestamp === 'function') ? window.QS_formatTimestamp() : new Date().toLocaleString()
-          const message = `Plex maintenance active${windowLabel} at ${nowLabel}. Kometa will start automatically when it ends.`
-          showToast('warning', message)
-          $('#run-output-log').text(`${message}\n`)
-          $('#run-now').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i> Waiting...')
-          $('#stop-now').addClass('d-none')
-          if (kometaStatusInterval) clearInterval(kometaStatusInterval)
-          kometaStatusInterval = setInterval(checkKometaStatus, 5000)
-          return
-        }
-
-        // ✅ Delay polling slightly to allow Kometa to start
-        setTimeout(() => {
-          kometaPollingStarted = false
-          startPollingIfNeeded()
-        }, 5500) // <-- 1.5 second delay
-      })
+  $('#run-recovery-command').on('click', function () {
+    const command = getRecoveryRunCommand()
+    const startMode = String($(this).data('start-mode') || 'recovery').trim().toLowerCase() || 'recovery'
+    const contextMismatch = String($(this).data('context-mismatch') || '').toLowerCase() === 'true'
+    if (contextMismatch) {
+      const confirmed = window.confirm('This incomplete run was recorded under a different config than the one currently loaded. Run the recovery command anyway?')
+      if (!confirmed) return
+    }
+    startKometaCommand(command, {
+      startMode,
+      requireValidated: false,
+      startMessage: startMode === 'logged' ? 'Starting last logged Kometa command...\n' : 'Starting Kometa recovery command...\n'
+    })
   })
 
   // Stop button click handler
@@ -3245,6 +3394,7 @@ $(document).ready(function () {
       .then(res => res.json())
       .then(data => {
         KOMETA_STATUS = data.status || null
+        KOMETA_PENDING_START = Boolean(data.pending_start && data.status !== 'running')
         const $updateBtn = $updateKometaBtn
         const $forceUpdate = $forceUpdateToggle
         const $runNow = $('#run-now')
@@ -3272,6 +3422,10 @@ $(document).ready(function () {
         }
 
         if (data.pending_start && data.status !== 'running') {
+          applyActiveRunCommandState(
+            data.pending_command || activeRunCommandOverride || getRecoveryRunCommand(),
+            data.pending_start_mode || activeRunCommandMode || 'recovery'
+          )
           const windowLabel = data.maintenance_window ? ` (${data.maintenance_window})` : ''
           const nowLabel = (typeof window.QS_formatTimestamp === 'function') ? window.QS_formatTimestamp() : new Date().toLocaleString()
           const message = `Plex maintenance active${windowLabel} at ${nowLabel}. Kometa will start automatically when it ends.`
@@ -3281,6 +3435,7 @@ $(document).ready(function () {
           if (!$('#run-output-log').text().includes('Plex maintenance')) {
             $('#run-output-log').append(`\n${message}`)
           }
+          syncIncompleteRunActions()
           if (kometaStatusInterval) clearInterval(kometaStatusInterval)
           kometaStatusInterval = setInterval(checkKometaStatus, 5000)
           return
@@ -3290,11 +3445,17 @@ $(document).ready(function () {
         if (KOMETA_UPDATING) {
           $runNow.prop('disabled', true).html('<i class="bi bi-hourglass me-1"></i> Updating...')
           $stopNow.prop('disabled', true)
+          syncIncompleteRunActions()
           return // don't do the rest while we're mid-update
         }
 
         // Handle Kometa process states
         if (data.status === 'running') {
+          applyActiveRunCommandState(
+            data.active_command || activeRunCommandOverride || getCurrentRunCommand(),
+            data.start_mode || activeRunCommandMode || 'current'
+          )
+          KOMETA_PENDING_START = false
           finalLogscanAnalyzeTriggered = false
           $('#incomplete-run-alert').addClass('d-none')
           // Kometa is actively running → keep Run disabled, allow Stop
@@ -3302,6 +3463,7 @@ $(document).ready(function () {
           $runNow.prop('disabled', true).html('<i class="bi bi-play-fill me-1"></i> Run Now')
           $stopNow.removeClass('d-none').prop('disabled', false)
           $('#run-output').removeClass('d-none')
+          syncIncompleteRunActions()
           startPollingIfNeeded()
           return
         }
@@ -3310,15 +3472,16 @@ $(document).ready(function () {
         if (typeof kometaInterval !== 'undefined' && kometaInterval) clearInterval(kometaInterval)
         if (typeof kometaStatusInterval !== 'undefined' && kometaStatusInterval) clearInterval(kometaStatusInterval)
         stopProgressPolling()
-        if (lastRunProgressPayload) {
-          renderRunProgress(lastRunProgressPayload)
-        }
+        clearRunProgress(true)
+        clearActiveRunCommandState()
+        try { buildCommand() } catch (_) {}
 
         $runNow.html('<i class="bi bi-play-fill me-1"></i> Run Now')
         $stopNow.addClass('d-none').prop('disabled', false)
         updateRunNowState()
 
         if (data.status === 'done') {
+          KOMETA_PENDING_START = false
           if (!finalLogscanAnalyzeTriggered) {
             finalLogscanAnalyzeTriggered = true
             fetchLogscanAnalysis(true)
@@ -3329,10 +3492,12 @@ $(document).ready(function () {
             $('#run-output-log').append(`\n⚠️ Kometa exited with code ${data.return_code}. Check logs for details.`)
           }
         } else if (data.status === 'not started') {
+          KOMETA_PENDING_START = false
           $('#run-output-log').append('\n🟥 Kometa is not running.')
         }
       })
       .catch(err => {
+        KOMETA_PENDING_START = false
         console.error('Error checking Kometa status:', err)
         $('#run-output-log').append('\n⚠️ Failed to check Kometa status.')
       })
