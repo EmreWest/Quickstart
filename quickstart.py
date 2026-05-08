@@ -2027,6 +2027,10 @@ def _launch_imagemaid_command(command, mode=None, config_name=None):
     if not any(p.endswith("imagemaid.py") for p in command_parts):
         command_parts.insert(1, str(imagemaid_py))
 
+    env_ready, env_result = _reset_imagemaid_runtime_env(imagemaid_root)
+    if not env_ready:
+        return False, env_result or "Quickstart could not reset the ImageMaid runtime .env file."
+
     helpers.ts_log(f"argv={command_parts!r}", level="DEBUG")
     _update_imagemaid_run_context(command_parts, mode=mode, config_name=config_name)
     launch_log_path = Path(helpers.get_imagemaid_launch_log_file())
@@ -2059,6 +2063,17 @@ def _launch_imagemaid_command(command, mode=None, config_name=None):
 
     _schedule_quickstart_imagemaid_run_marker(imagemaid_root, mode=mode, config_name=config_name)
     return True, proc.pid
+
+
+def _reset_imagemaid_runtime_env(imagemaid_root):
+    try:
+        env_path = Path(imagemaid_root) / "config" / ".env"
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        env_path.write_text("", encoding="utf-8")
+        helpers.ts_log(f"Reset ImageMaid runtime env override file: {env_path}", level="DEBUG")
+        return True, str(env_path)
+    except Exception as exc:
+        return False, f"Quickstart could not reset ImageMaid env file before launch: {exc}"
 
 
 def _extract_selected_libraries(command):
@@ -3083,7 +3098,7 @@ logscan_reingest_state = {
 # Bump this integer when a release needs a one-time Analytics reset + log reingest
 # on startup. Quickstart persists the highest successful level to config/.env so
 # skipped releases still catch up automatically.
-REQUIRED_LOGSCAN_MIGRATION_LEVEL = 4
+REQUIRED_LOGSCAN_MIGRATION_LEVEL = 8
 LOGSCAN_STARTUP_MIGRATIONS_ENV = "QS_LOGSCAN_STARTUP_MIGRATIONS"
 LOGSCAN_MIGRATION_LEVEL_DONE_ENV = "QS_LOGSCAN_MIGRATION_LEVEL_DONE"
 LOGSCAN_STARTUP_MIGRATION_JOB_ID = "startup-logscan-migration"
@@ -8613,6 +8628,11 @@ def logscan_analyze():
         data["cached"] = True
         return jsonify(data)
 
+    try:
+        content = log_path.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return jsonify({"error": f"Failed to read log: {str(e)}"}), 500
+
     analyzer = logscan.LogscanAnalyzer()
     result = analyzer.analyze_log_file(
         log_path,
@@ -8627,6 +8647,12 @@ def logscan_analyze():
         can_ingest = run_complete and has_finish and not is_running
         result["ingest_skipped"] = not can_ingest
         if can_ingest:
+            if str(summary.get("tool_name") or "kometa").strip().lower() == "kometa":
+                summary["progress_snapshot"] = _build_completed_log_progress_snapshot(
+                    summary=summary,
+                    content=content,
+                    analyzer=analyzer,
+                )
             ingest_cache = _load_logscan_ingest_cache()
             cache_logs = ingest_cache["logs"]
             cache_key = str(log_path.resolve())
@@ -8699,9 +8725,23 @@ def _get_progress_run_order(config_data=None):
     return normalized
 
 
-def _get_progress_library_list(selected_libraries=None, config_path=None, config_data=None):
-    settings = persistence.retrieve_settings("025-libraries")
-    library_settings = settings.get("libraries", {}) if isinstance(settings, dict) else {}
+def _get_progress_library_list(selected_libraries=None, config_path=None, config_data=None, config_name=None):
+    library_settings = {}
+    if has_request_context():
+        settings = persistence.retrieve_settings("025-libraries")
+        library_settings = settings.get("libraries", {}) if isinstance(settings, dict) else {}
+    elif config_name:
+        try:
+            _validated, _user_entered, stored = database.retrieve_section_data(config_name, "libraries")
+            if not isinstance(stored, dict):
+                _validated, _user_entered, stored = database.retrieve_section_data(config_name, "025-libraries")
+            if isinstance(stored, dict):
+                if isinstance(stored.get("libraries"), dict):
+                    library_settings = stored.get("libraries", {})
+                else:
+                    library_settings = stored
+        except Exception:
+            library_settings = {}
     libraries = []
     type_by_name = {}
     if isinstance(library_settings, dict):
@@ -8743,7 +8783,8 @@ def logscan_progress():
         from collections import deque
         from copy import deepcopy
 
-        size_param = request.args.get("size", "4000")
+        size_arg = request.args.get("size")
+        size_param = size_arg if size_arg is not None else "4000"
         max_lines = None
         if size_param.lower() not in ("all", "full"):
             try:
@@ -8841,6 +8882,14 @@ def logscan_progress():
         run_mode = ctx.get("run_mode") or "all"
         running = helpers.is_kometa_running()
         stopped_requested = bool(ctx.get("stop_requested_at"))
+        cached_data = LOGSCAN_PROGRESS_CACHE.get("data")
+        cache_matches_run = bool(cached_data and cached_data.get("run_started_at") == started_at)
+
+        # Seed progress from the full log when no explicit size was requested and
+        # the current run has no matching cached progress state yet. After the
+        # cache is warm, later polls can safely use the faster tail parse.
+        if size_arg is None and not cache_matches_run:
+            max_lines = None
 
         if log_stats and cached.get("mtime") == log_stats.st_mtime and cached.get("size") == log_stats.st_size:
             data = cached.get("data") or {}
@@ -8848,7 +8897,6 @@ def logscan_progress():
             data = normalize_progress_for_stopped(data, running, stopped_requested)
             return jsonify(data)
 
-        cached_data = LOGSCAN_PROGRESS_CACHE.get("data")
         if cached_data and cached_data.get("run_started_at") != started_at:
             LOGSCAN_PROGRESS_CACHE.update({"mtime": None, "size": None, "data": None})
         analyzer = logscan.LogscanAnalyzer()
@@ -9616,22 +9664,6 @@ def _analyze_imagemaid_log_content(content, log_path=None):
 
         if "PhotoTranscoder set to True" in line:
             photo_transcoder_enabled = True
-        if "--photo-transcoder" in line:
-            photo_transcoder_enabled = True
-        if "--empty-trash" in line:
-            empty_trash_enabled = True
-        if "--clean-bundles" in line:
-            clean_bundles_enabled = True
-        if "--optimize-db" in line:
-            optimize_db_enabled = True
-        if "--local" in line:
-            local_db_enabled = True
-        if "--existing" in line:
-            use_existing_enabled = True
-        if "--no-verify-ssl" in line:
-            no_verify_ssl_enabled = True
-        if "--overlays-only" in line:
-            overlays_only_enabled = True
 
         if "Empty Trash Plex Operation Started" in line:
             operation_started["empty_trash"] = True
@@ -9784,6 +9816,15 @@ def _analyze_imagemaid_log_content(content, log_path=None):
     config_name = str(config_name or "").strip() or "unknown"
     command_signature = f"--mode {mode}"
     run_command = run_command_text or f"imagemaid {command_signature}"
+    command_snapshot = _parse_imagemaid_command_snapshot(run_command_text, fallback_mode=mode)
+    photo_transcoder_enabled = bool(photo_transcoder_enabled or command_snapshot.get("photo_transcoder"))
+    empty_trash_enabled = bool(empty_trash_enabled or command_snapshot.get("empty_trash"))
+    clean_bundles_enabled = bool(clean_bundles_enabled or command_snapshot.get("clean_bundles"))
+    optimize_db_enabled = bool(optimize_db_enabled or command_snapshot.get("optimize_db"))
+    local_db_enabled = bool(local_db_enabled or command_snapshot.get("local_db"))
+    use_existing_enabled = bool(use_existing_enabled or command_snapshot.get("use_existing"))
+    no_verify_ssl_enabled = bool(no_verify_ssl_enabled or command_snapshot.get("no_verify_ssl"))
+    overlays_only_enabled = bool(overlays_only_enabled or command_snapshot.get("overlays_only"))
     timestamp_seed = started_at or finished_at or (stats.st_mtime if stats else 0)
     run_key_seed = f"imagemaid|{timestamp_seed}|{mode}|{path.name if path else 'imagemaid.log'}"
     created_at = finished_at or started_at or _iso_from_mtime(stats.st_mtime if stats else None)
@@ -9881,6 +9922,7 @@ def _analyze_imagemaid_log_content(content, log_path=None):
         "completion_reason": completion_reason,
         "imagemaid_mode": mode,
     }
+    summary["progress_snapshot"] = _build_imagemaid_progress_snapshot(summary)
     recommendations = _build_imagemaid_recommendations(summary, error_lines=error_lines, completion_reason=completion_reason)
     return {"summary": summary, "recommendations": recommendations}
 
@@ -10241,17 +10283,6 @@ def _normalize_logscan_archive_filenames(archive_dir=None):
     return {"renamed": renamed, "skipped": skipped, "errors": errors}
 
 
-logscan_archive_result = _normalize_logscan_archive_filenames()
-if logscan_archive_result.get("renamed"):
-    helpers.ts_log(
-        f"Normalized {logscan_archive_result['renamed']} archived log file(s) to the canonical archive layout.",
-        level="INFO",
-    )
-if logscan_archive_result.get("errors"):
-    for msg in logscan_archive_result["errors"]:
-        helpers.ts_log(msg, level="WARNING")
-
-
 def _normalize_cli_whitespace(command):
     return re.sub(r"\s+", " ", str(command or "")).strip()
 
@@ -10380,7 +10411,10 @@ def _should_suppress_recovery_for_completed_scope(original_command, progress_lib
 def _resolve_config_path_for_command(config_name=None):
     normalized_name = str(config_name or "").strip().lower().replace(" ", "_")
     if not normalized_name:
-        normalized_name = str(session.get("config_name") or "default").strip().lower().replace(" ", "_") or "default"
+        if has_request_context():
+            normalized_name = str(session.get("config_name") or "default").strip().lower().replace(" ", "_") or "default"
+        else:
+            normalized_name = "default"
     return str((helpers.get_kometa_root_path() / "config" / f"{normalized_name}_config.yml").resolve())
 
 
@@ -10388,6 +10422,8 @@ def _inject_config_path_for_command(command, config_name=None):
     cleaned = _normalize_cli_whitespace(command)
     if not cleaned:
         return ""
+    if "<config>" not in cleaned and "--config" not in cleaned and "-c" not in cleaned and not str(config_name or "").strip():
+        return cleaned
     config_path = _resolve_config_path_for_command(config_name=config_name)
     quoted = _quote_cli_value(config_path)
     if "<config>" in cleaned:
@@ -10524,6 +10560,267 @@ def _format_duration_brief(total_seconds):
     return " ".join(parts)
 
 
+def _format_compact_count_brief(value):
+    if not isinstance(value, (int, float)):
+        return ""
+    count = max(0, int(value))
+    if count >= 1000000:
+        return f"{(count / 1000000):.1f}".rstrip("0").rstrip(".") + "M"
+    if count >= 1000:
+        return f"{(count / 1000):.1f}".rstrip("0").rstrip(".") + "K"
+    return str(count)
+
+
+def _format_imagemaid_bytes_brief(value):
+    if not isinstance(value, (int, float)):
+        return ""
+    total = max(0, int(value))
+    units = ["B", "KB", "MB", "GB", "TB"]
+    size = float(total)
+    unit_index = 0
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024
+        unit_index += 1
+    if unit_index == 0:
+        display = str(int(size))
+    elif size >= 10:
+        display = f"{size:.1f}".rstrip("0").rstrip(".")
+    else:
+        display = f"{size:.2f}".rstrip("0").rstrip(".")
+    return f"{display} {units[unit_index]}"
+
+
+def _build_imagemaid_progress_snapshot(summary=None):
+    summary = summary if isinstance(summary, dict) else {}
+    if str(summary.get("tool_name") or "").strip().lower() != "imagemaid":
+        return {}
+
+    analysis_counts = summary.get("analysis_counts") if isinstance(summary.get("analysis_counts"), dict) else {}
+    section_runtimes = summary.get("section_runtimes") if isinstance(summary.get("section_runtimes"), dict) else {}
+    mode = str(summary.get("imagemaid_mode") or "report").strip().lower() or "report"
+    run_complete = bool(summary.get("run_complete"))
+    completion_reason = str(summary.get("completion_reason") or "").strip().lower()
+    error_total = 0
+    log_counts = summary.get("log_counts") if isinstance(summary.get("log_counts"), dict) else {}
+    for key in ("error", "critical", "trace"):
+        if isinstance(log_counts.get(key), (int, float)):
+            error_total += int(log_counts.get(key) or 0)
+    if isinstance(analysis_counts.get("imagemaid_error_lines"), (int, float)):
+        error_total = max(error_total, int(analysis_counts.get("imagemaid_error_lines") or 0))
+
+    rows = []
+    total_scan_seconds = 0
+    total_action_seconds = 0
+
+    def _runtime_cell(value):
+        if not isinstance(value, (int, float)):
+            return {}
+        seconds = max(0, int(value))
+        return {"label": _format_duration_brief(seconds), "tone": "primary"}
+
+    def _badge_cell(label, tone="success"):
+        text = str(label or "").strip()
+        return {"label": text, "tone": tone} if text else {}
+
+    def _row_status(observed=False, enabled=False):
+        if completion_reason == "maintenance_blocked_start":
+            return "Blocked", " text-bg-warning"
+        if observed:
+            if run_complete:
+                if error_total > 0:
+                    return "Completed", " text-bg-warning"
+                return "Completed", " text-bg-success"
+            if completion_reason == "user_stop":
+                return "Stopped", " text-bg-warning"
+            return "Observed", " text-bg-primary"
+        if enabled:
+            if completion_reason == "maintenance_blocked_start":
+                return "Blocked", " text-bg-warning"
+            return "Pending", " text-bg-secondary"
+        return "Skipped", " text-bg-secondary"
+
+    def _append_row(name, row_type, scan_seconds=None, action_seconds=None, items_label="", outcome_label="", enabled=False, items_tone="success", outcome_tone="success"):
+        nonlocal total_scan_seconds, total_action_seconds
+        observed = any(
+            [
+                isinstance(scan_seconds, (int, float)),
+                isinstance(action_seconds, (int, float)),
+                bool(str(items_label or "").strip()),
+                bool(str(outcome_label or "").strip()),
+            ]
+        )
+        if not enabled and not observed:
+            return
+        if isinstance(scan_seconds, (int, float)):
+            total_scan_seconds += max(0, int(scan_seconds))
+        if isinstance(action_seconds, (int, float)):
+            total_action_seconds += max(0, int(action_seconds))
+        status, status_class = _row_status(observed=observed, enabled=enabled)
+        rows.append(
+            {
+                "name": name,
+                "type": row_type,
+                "status": status,
+                "status_class": status_class,
+                "phase_cells": [
+                    _runtime_cell(scan_seconds),
+                    _runtime_cell(action_seconds),
+                    _badge_cell(items_label, tone=items_tone),
+                    _badge_cell(outcome_label, tone=outcome_tone),
+                ],
+            }
+        )
+
+    database_seen = bool(analysis_counts.get("imagemaid_database_seen"))
+    local_db_enabled = bool(analysis_counts.get("imagemaid_local_db_enabled"))
+    use_existing_enabled = bool(analysis_counts.get("imagemaid_use_existing_enabled"))
+    database_downloaded_new = bool(analysis_counts.get("imagemaid_database_downloaded_new"))
+    database_download_failed = bool(analysis_counts.get("imagemaid_database_download_failed"))
+    database_enabled = database_seen or "database_download" in section_runtimes or "database_query" in section_runtimes
+    database_items = ""
+    if local_db_enabled:
+        database_items = "Local DB"
+    elif use_existing_enabled:
+        database_items = "Existing DB"
+    elif database_downloaded_new:
+        database_items = "Downloaded"
+    elif database_seen:
+        database_items = "Plex API"
+    database_outcome = "Failed" if database_download_failed else ("Ready" if database_enabled else "")
+    _append_row(
+        "Database Prep",
+        "Source",
+        scan_seconds=section_runtimes.get("database_download"),
+        action_seconds=section_runtimes.get("database_query"),
+        items_label=database_items,
+        outcome_label=database_outcome,
+        enabled=database_enabled,
+        items_tone="secondary",
+        outcome_tone="danger" if database_download_failed else "success",
+    )
+
+    report_enabled = mode == "report" or "report_bloat_scan" in section_runtimes or "report_bloat_action" in section_runtimes
+    report_outcome = "Reported" if report_enabled and run_complete else ""
+    _append_row(
+        "Bloat Report",
+        "Metadata",
+        scan_seconds=section_runtimes.get("report_bloat_scan"),
+        action_seconds=section_runtimes.get("report_bloat_action"),
+        items_label="Mode report" if report_enabled else "",
+        outcome_label=report_outcome,
+        enabled=report_enabled,
+        items_tone="secondary",
+        outcome_tone="success",
+    )
+
+    restore_found = int(analysis_counts.get("imagemaid_restore_found_files") or 0) if isinstance(analysis_counts.get("imagemaid_restore_found_files"), (int, float)) else 0
+    restore_removed = int(analysis_counts.get("imagemaid_restore_removed_files") or 0) if isinstance(analysis_counts.get("imagemaid_restore_removed_files"), (int, float)) else 0
+    restore_recovered = (
+        int(analysis_counts.get("imagemaid_restore_recovered_bytes") or 0) if isinstance(analysis_counts.get("imagemaid_restore_recovered_bytes"), (int, float)) else 0
+    )
+    restore_enabled = mode in {"clear", "restore"} or "restore_dir_scan" in section_runtimes or "restore_dir_action" in section_runtimes or restore_found > 0 or restore_removed > 0
+    restore_items = ""
+    if restore_removed > 0:
+        restore_items = f"Removed {_format_compact_count_brief(restore_removed)}"
+    elif restore_found > 0:
+        restore_items = f"Found {_format_compact_count_brief(restore_found)}"
+    restore_outcome = _format_imagemaid_bytes_brief(restore_recovered) if restore_recovered > 0 else ""
+    _append_row(
+        "Restore Cache",
+        "File cleanup",
+        scan_seconds=section_runtimes.get("restore_dir_scan"),
+        action_seconds=section_runtimes.get("restore_dir_action"),
+        items_label=restore_items,
+        outcome_label=restore_outcome,
+        enabled=restore_enabled,
+        items_tone="primary",
+        outcome_tone="success",
+    )
+
+    photo_found = int(analysis_counts.get("imagemaid_photo_found_files") or 0) if isinstance(analysis_counts.get("imagemaid_photo_found_files"), (int, float)) else 0
+    photo_removed = int(analysis_counts.get("imagemaid_photo_removed_files") or 0) if isinstance(analysis_counts.get("imagemaid_photo_removed_files"), (int, float)) else 0
+    photo_recovered = int(analysis_counts.get("imagemaid_photo_recovered_bytes") or 0) if isinstance(analysis_counts.get("imagemaid_photo_recovered_bytes"), (int, float)) else 0
+    photo_enabled = (
+        bool(analysis_counts.get("imagemaid_photo_transcoder_enabled"))
+        or "photo_transcoder_scan" in section_runtimes
+        or "photo_transcoder_remove" in section_runtimes
+        or photo_found > 0
+        or photo_removed > 0
+    )
+    photo_items = ""
+    if photo_removed > 0:
+        photo_items = f"Removed {_format_compact_count_brief(photo_removed)}"
+    elif photo_found > 0:
+        photo_items = f"Found {_format_compact_count_brief(photo_found)}"
+    photo_outcome = _format_imagemaid_bytes_brief(photo_recovered) if photo_recovered > 0 else ""
+    _append_row(
+        "PhotoTranscoder",
+        "File cleanup",
+        scan_seconds=section_runtimes.get("photo_transcoder_scan"),
+        action_seconds=section_runtimes.get("photo_transcoder_remove"),
+        items_label=photo_items,
+        outcome_label=photo_outcome,
+        enabled=photo_enabled,
+        items_tone="primary",
+        outcome_tone="success",
+    )
+
+    for label, enabled_key, started_key, runtime_key in [
+        ("Empty Trash", "imagemaid_empty_trash_enabled", "imagemaid_empty_trash_started", "empty_trash_action"),
+        ("Clean Bundles", "imagemaid_clean_bundles_enabled", "imagemaid_clean_bundles_started", "clean_bundles_action"),
+        ("Optimize DB", "imagemaid_optimize_db_enabled", "imagemaid_optimize_db_started", "optimize_db_action"),
+    ]:
+        enabled = bool(analysis_counts.get(enabled_key)) or bool(analysis_counts.get(started_key)) or runtime_key in section_runtimes
+        runtime_value = section_runtimes.get(runtime_key)
+        items_label = "Enabled" if enabled else ""
+        outcome_label = "Done" if isinstance(runtime_value, (int, float)) and run_complete else ""
+        _append_row(
+            label,
+            "Plex task",
+            scan_seconds=None,
+            action_seconds=runtime_value,
+            items_label=items_label,
+            outcome_label=outcome_label,
+            enabled=enabled,
+            items_tone="secondary",
+            outcome_tone="success",
+        )
+
+    if not rows:
+        return {}
+
+    total_removed = int(analysis_counts.get("imagemaid_total_removed_files") or 0) if isinstance(analysis_counts.get("imagemaid_total_removed_files"), (int, float)) else 0
+    total_recovered = int(analysis_counts.get("imagemaid_total_recovered_bytes") or 0) if isinstance(analysis_counts.get("imagemaid_total_recovered_bytes"), (int, float)) else 0
+    completed_count = 0
+    for row in rows:
+        if row.get("status") in {"Completed", "Skipped"}:
+            completed_count += 1
+
+    return {
+        "name_label": "Operation",
+        "type_label": "Area",
+        "columns": [
+            {"key": "scan", "label": "Scan Time"},
+            {"key": "action", "label": "Action Time"},
+            {"key": "items", "label": "Observed"},
+            {"key": "outcome", "label": "Result"},
+        ],
+        "rows": rows,
+        "completed_count": completed_count,
+        "total_count": len(rows),
+        "preparation_label": "",
+        "footer_cells": [
+            _format_duration_brief(total_scan_seconds) if total_scan_seconds > 0 else "",
+            _format_duration_brief(total_action_seconds) if total_action_seconds > 0 else "",
+            f"Removed {_format_compact_count_brief(total_removed)}" if total_removed > 0 else "",
+            _format_imagemaid_bytes_brief(total_recovered) if total_recovered > 0 else "",
+        ],
+        "total_label": (
+            _format_duration_brief(summary.get("run_time_seconds")) if isinstance(summary.get("run_time_seconds"), (int, float)) and summary.get("run_time_seconds") else ""
+        ),
+    }
+
+
 def _build_incomplete_run_timing_summary(started_at=None, last_log_at=None, maintenance_summary=None):
     summary = maintenance_summary if isinstance(maintenance_summary, dict) else {}
     started_dt = _parse_log_display_datetime(started_at)
@@ -10615,7 +10912,7 @@ def _build_maintenance_event_rows(maintenance_summary=None):
     return rows
 
 
-def _build_incomplete_progress_snapshot(progress=None, last_log_at=None, config_data=None, original_command=""):
+def _build_incomplete_progress_snapshot(progress=None, last_log_at=None, config_data=None, original_command="", config_name=None):
     progress = progress if isinstance(progress, dict) else {}
     libraries = progress.get("libraries") if isinstance(progress.get("libraries"), list) else []
     if not libraries:
@@ -10644,12 +10941,56 @@ def _build_incomplete_progress_snapshot(progress=None, last_log_at=None, config_
     elif "playlists" not in allowed_phases:
         allowed_phases = allowed_phases + ["playlists"]
     columns = [{"key": key, "label": phase_lookup.get(key, key.title())} for key in allowed_phases]
+    configured_library_entries = []
+    configured_library_names = []
+    configured_type_by_name = {}
+    config_path = _extract_cli_option_value(original_command, "--config")
+    selected_libraries = _extract_selected_libraries(original_command)[1]
+    for entry in _get_progress_library_list(
+        selected_libraries=selected_libraries,
+        config_path=config_path,
+        config_data=config_data,
+        config_name=config_name,
+    ):
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "").strip()
+        lib_type = str(entry.get("type") or "").strip()
+        if name:
+            configured_type_by_name[name] = lib_type or None
+    if isinstance(config_data, dict):
+        config_libraries = config_data.get("libraries")
+        if isinstance(config_libraries, dict):
+            configured_library_names = [str(name).strip() for name in config_libraries.keys() if str(name).strip()]
+            configured_library_entries = [{"name": name, "type": configured_type_by_name.get(name)} for name in configured_library_names]
+    elif configured_type_by_name:
+        configured_library_names = list(configured_type_by_name.keys())
+        configured_library_entries = [{"name": name, "type": configured_type_by_name.get(name)} for name in configured_library_names]
+
+    def _normalize_snapshot_library_name(raw_name):
+        name = str(raw_name or "").strip()
+        if not name:
+            return ""
+        if configured_library_entries:
+            matched = logscan.LogscanAnalyzer()._match_library_name(name, configured_library_entries)
+            if matched:
+                return matched
+            if name.lower().startswith("finished "):
+                alternate = name[9:].strip()
+                matched = logscan.LogscanAnalyzer()._match_library_name(alternate, configured_library_entries)
+                if matched:
+                    return matched
+        if name.lower().startswith("finished "):
+            return name[9:].strip()
+        return name
+
+    current_library = _normalize_snapshot_library_name(current_library)
 
     rows = []
     totals = {column["key"]: 0 for column in columns}
     visible_libraries = [entry for entry in libraries if str((entry or {}).get("status") or "").strip() != "Skipped"]
     for entry in visible_libraries:
-        name = str(entry.get("name") or "").strip()
+        name = _normalize_snapshot_library_name(entry.get("name"))
         status = str(entry.get("status") or "Pending").strip() or "Pending"
         status_class = "text-bg-secondary"
         if status == "Done":
@@ -10689,10 +11030,11 @@ def _build_incomplete_progress_snapshot(progress=None, last_log_at=None, config_
                 totals[phase_key] = totals.get(phase_key, 0) + int(seconds or 0)
             phase_cells.append({"label": label, "tone": tone})
 
+        row_type = configured_type_by_name.get(name) or entry.get("type")
         rows.append(
             {
                 "name": name,
-                "type": str(entry.get("type") or "—").strip() or "—",
+                "type": str(row_type or "—").strip() or "—",
                 "status": status,
                 "status_class": status_class,
                 "phase_cells": phase_cells,
@@ -10720,6 +11062,54 @@ def _build_incomplete_progress_snapshot(progress=None, last_log_at=None, config_
         ],
         "total_label": _format_duration_brief(total_seconds) if total_seconds > 0 else "",
     }
+
+
+def _build_completed_log_progress_snapshot(summary=None, content="", analyzer=None):
+    summary = summary if isinstance(summary, dict) else {}
+    if not content:
+        return {}
+    tool_name = str(summary.get("tool_name") or "kometa").strip().lower() or "kometa"
+    if tool_name != "kometa":
+        return {}
+
+    original_command = summary.get("run_command") or ""
+    if not original_command:
+        return {}
+    config_name = str(summary.get("config_name") or "").strip()
+    original_command = _inject_config_path_for_command(
+        original_command,
+        config_name=config_name,
+    )
+    config_path = _extract_cli_option_value(original_command, "--config")
+    if not config_path and config_name:
+        config_path = _resolve_config_path_for_command(config_name=config_name)
+    config_data = _load_progress_config(config_path) if config_path else {}
+    selected_libraries = _extract_selected_libraries(original_command)[1]
+    progress_analyzer = analyzer if analyzer is not None else logscan.LogscanAnalyzer()
+    progress = progress_analyzer.extract_progress(
+        content,
+        library_list=_get_progress_library_list(
+            selected_libraries=selected_libraries,
+            config_path=config_path,
+            config_data=config_data,
+            config_name=config_name,
+        ),
+        selected_libraries=selected_libraries,
+        previous=None,
+        run_started_at=summary.get("started_at"),
+        now_ts=datetime.now(timezone.utc),
+        is_running=False,
+    )
+    snapshot = _build_incomplete_progress_snapshot(
+        progress=progress,
+        last_log_at=summary.get("finished_at") or summary.get("started_at"),
+        config_data=config_data,
+        original_command=original_command,
+        config_name=config_name,
+    )
+    if not snapshot:
+        return {}
+    return snapshot
 
 
 def _build_incomplete_resume_message(phase_current=None, current_library=None, finished_at=None):
@@ -11171,6 +11561,9 @@ def _build_incomplete_run_from_cache_entry(log_path, cache_entry=None, config_na
             original_command,
             config_name=summary.get("config_name") or config_name,
         )
+    progress_snapshot = summary.get("progress_snapshot") if isinstance(summary.get("progress_snapshot"), dict) else {}
+    if not progress_snapshot:
+        progress_snapshot = cache_entry.get("resume_progress_snapshot") if isinstance(cache_entry.get("resume_progress_snapshot"), dict) else {}
     return {
         "run_key": run_key,
         "tool_name": tool_name,
@@ -11211,11 +11604,40 @@ def _build_incomplete_run_from_cache_entry(log_path, cache_entry=None, config_na
         "phase_current": cache_entry.get("phase_current"),
         "current_library": cache_entry.get("current_library"),
         "current_collection": cache_entry.get("current_collection"),
+        "progress_snapshot": progress_snapshot,
+        "resume_progress_snapshot": (progress_snapshot if isinstance(progress_snapshot, dict) else {}),
         "resume_reason": cache_entry.get("resume_reason") or "Run appears incomplete. Open the report for more detail or download the log for investigation.",
         "resume_primary": cache_entry.get("resume_primary") or "",
         "resume_recommendations": cache_entry.get("resume_recommendations") if isinstance(cache_entry.get("resume_recommendations"), list) else [],
         "resume_explanation": cache_entry.get("resume_explanation") if isinstance(cache_entry.get("resume_explanation"), list) else [],
     }
+
+
+def _build_incomplete_resume_cache_fields(log_path, cache_entry=None, config_name=None):
+    cache_entry = cache_entry if isinstance(cache_entry, dict) else {}
+    parsed = _analyze_incomplete_log_for_resume(log_path, cache_entry=cache_entry, config_name=config_name)
+    if not isinstance(parsed, dict):
+        return {}
+    fields = {}
+    for key in (
+        "phase_current",
+        "current_library",
+        "current_collection",
+        "resume_reason",
+        "resume_primary",
+        "resume_recommendations",
+        "resume_explanation",
+        "resume_progress_snapshot",
+        "resume_scope_completed",
+        "resume_timing_summary",
+        "resume_scope_summary",
+        "resume_maintenance_events",
+    ):
+        value = parsed.get(key)
+        if value is None:
+            continue
+        fields[key] = value
+    return fields
 
 
 def _build_incomplete_log_fallback(log_path, cache_entry=None, config_name=None):
@@ -11599,6 +12021,21 @@ def _ingest_completed_live_logs(tool_name="kometa", log_dir=None):
             if not isinstance(summary, dict):
                 continue
             if not summary.get("run_complete"):
+                incomplete_cache_fields = {}
+                if tool_name == "kometa":
+                    incomplete_cache_fields = _build_incomplete_resume_cache_fields(
+                        path,
+                        cache_entry={
+                            "mtime": stats.st_mtime,
+                            "size": stats.st_size,
+                            "run_key": summary.get("run_key"),
+                            "tool_name": tool_name,
+                            "run_complete": False,
+                            "summary": summary,
+                            "recommendations": recommendations,
+                        },
+                        config_name=summary.get("config_name"),
+                    )
                 cache_logs[cache_key] = {
                     "mtime": stats.st_mtime,
                     "size": stats.st_size,
@@ -11608,10 +12045,17 @@ def _ingest_completed_live_logs(tool_name="kometa", log_dir=None):
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                     "summary": summary,
                     "recommendations": recommendations,
+                    **incomplete_cache_fields,
                 }
                 cache_dirty = True
                 continue
 
+            if tool_name == "kometa":
+                summary["progress_snapshot"] = _build_completed_log_progress_snapshot(
+                    summary=summary,
+                    content=content,
+                    analyzer=analyzer,
+                )
             cached_run_key = cached_entry.get("run_key")
             if not (cached_entry.get("run_complete") is True and cached_run_key == summary.get("run_key")):
                 if database.save_log_run(summary, recommendations=recommendations):
@@ -11695,6 +12139,17 @@ def _archive_log_file(path, archive_dir, log_dir=None, allow_live_meta=False):
         return dest
     except Exception:
         return None
+
+
+logscan_archive_result = _normalize_logscan_archive_filenames()
+if logscan_archive_result.get("renamed"):
+    helpers.ts_log(
+        f"Normalized {logscan_archive_result['renamed']} archived log file(s) to the canonical archive layout.",
+        level="INFO",
+    )
+if logscan_archive_result.get("errors"):
+    for msg in logscan_archive_result["errors"]:
+        helpers.ts_log(msg, level="WARNING")
 
 
 def _archive_finished_live_meta_log_if_idle(log_dir=None):
@@ -11968,6 +12423,22 @@ def _perform_logscan_reingest(reset, job_id=None, update_state=True):
                     incomplete_recommendations = result.get("recommendations") if isinstance(result, dict) else None
                     if not isinstance(incomplete_recommendations, list):
                         incomplete_recommendations = []
+                    incomplete_cache_fields = {}
+                    if tool_name == "kometa":
+                        incomplete_cache_fields = _build_incomplete_resume_cache_fields(
+                            path,
+                            cache_entry={
+                                "mtime": stats.st_mtime,
+                                "size": stats.st_size,
+                                "run_key": summary.get("run_key"),
+                                "tool_name": tool_name,
+                                "run_complete": False,
+                                "summary": summary,
+                                "recommendations": incomplete_recommendations,
+                                "start_mode": summary.get("start_mode"),
+                            },
+                            config_name=summary.get("config_name"),
+                        )
                     cache_logs[cache_key] = {
                         "mtime": stats.st_mtime,
                         "size": stats.st_size,
@@ -12002,6 +12473,7 @@ def _perform_logscan_reingest(reset, job_id=None, update_state=True):
                         },
                         "start_mode": summary.get("start_mode"),
                         "recommendations": incomplete_recommendations,
+                        **incomplete_cache_fields,
                     }
                     cache_dirty = True
                     if path.parent.resolve() == live_dir.resolve() and path.name.lower() != "meta.log":
@@ -12037,6 +12509,12 @@ def _perform_logscan_reingest(reset, job_id=None, update_state=True):
                 if skip_save_if_cached and cached_run_key == summary.get("run_key"):
                     duplicates += 1
                 else:
+                    if tool_name == "kometa":
+                        summary["progress_snapshot"] = _build_completed_log_progress_snapshot(
+                            summary=summary,
+                            content=content,
+                            analyzer=analyzer,
+                        )
                     if database.save_log_run(summary, recommendations=result.get("recommendations")):
                         ingested += 1
                     else:

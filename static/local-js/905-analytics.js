@@ -32,22 +32,22 @@ $(document).ready(function () {
   const $ingest = $('#logscan-trends-ingest')
   const $issues = $('#logscan-trends-issues')
   const $libraries = $('#logscan-trends-libraries')
-  const $libraryFilter = $('#logscan-trends-library-filter')
+  const $libraryFilter = $('#logscan-trends-library-filter, #logscan-trends-library-filter-bottom')
   const $status = $('#logscan-trends-status')
   const $progress = $('#logscan-trends-progress')
   const $progressBar = $('#logscan-trends-progress-bar')
   const $progressText = $('#logscan-trends-progress-text')
-  const $limit = $('#logscan-trends-limit')
-  const $configFilter = $('#logscan-trends-config-filter')
-  const $toolFilter = $('#logscan-trends-tool-filter')
-  const $timeRange = $('#logscan-trends-time-range')
-  const $commandFilter = $('#logscan-trends-command-filter')
-  const $resetFilters = $('#logscan-trends-reset-filters')
-  const $dateStart = $('#logscan-trends-date-start')
-  const $dateEnd = $('#logscan-trends-date-end')
-  const $customDateRow = $('#logscan-trends-custom-date-row')
-  const $dateHint = $('#logscan-trends-date-hint')
-  const $runCount = $('#logscan-trends-count')
+  const $limit = $('#logscan-trends-limit, #logscan-trends-limit-bottom')
+  const $configFilter = $('#logscan-trends-config-filter, #logscan-trends-config-filter-bottom')
+  const $toolFilter = $('#logscan-trends-tool-filter, #logscan-trends-tool-filter-bottom')
+  const $timeRange = $('#logscan-trends-time-range, #logscan-trends-time-range-bottom')
+  const $commandFilter = $('#logscan-trends-command-filter, #logscan-trends-command-filter-bottom')
+  const $resetFilters = $('#logscan-trends-reset-filters, #logscan-trends-reset-filters-bottom')
+  const $dateStart = $('#logscan-trends-date-start, #logscan-trends-date-start-bottom')
+  const $dateEnd = $('#logscan-trends-date-end, #logscan-trends-date-end-bottom')
+  const $customDateRow = $('#logscan-trends-custom-date-row, #logscan-trends-custom-date-row-bottom')
+  const $dateHint = $('#logscan-trends-date-hint, #logscan-trends-date-hint-bottom')
+  const $runCount = $('#logscan-trends-count, #logscan-trends-count-bottom')
   const $reset = $('#logscan-trends-reset')
   const $reingest = $('#logscan-trends-reingest')
   const $confirmReset = $('#logscan-confirm-reset')
@@ -89,6 +89,7 @@ $(document).ready(function () {
   let allIncompleteRuns = []
   let allTableRuns = []
   const sectionDetailsByRunKey = new Map()
+  const expandedProgressRunKeys = new Set()
   let currentFilteredRuns = []
   let currentTableRuns = []
   let allRunsTotal = 0
@@ -101,6 +102,15 @@ $(document).ready(function () {
   let lastIngestState = null
   let analyticsPrefs = null
   const defaultReingestButtonLabel = $reingest.text().trim() || 'Reingest logs'
+
+  function syncMirroredControlValue ($controls, source) {
+    if (!$controls.length || !source) return
+    const value = $(source).val()
+    $controls.each(function () {
+      if (this === source) return
+      $(this).val(value)
+    })
+  }
 
   function escapeHtml (value) {
     return String(value || '')
@@ -463,6 +473,124 @@ $(document).ready(function () {
     return `<span title="${escapeHtml(title)}">${escapeHtml(parts.join(' • '))}</span>`
   }
 
+  function getProgressSnapshot (run) {
+    const snapshot = run && run.progress_snapshot && typeof run.progress_snapshot === 'object'
+      ? run.progress_snapshot
+      : (run && run.resume_progress_snapshot && typeof run.resume_progress_snapshot === 'object'
+          ? run.resume_progress_snapshot
+          : null)
+    if (!snapshot) return null
+    const columns = Array.isArray(snapshot.columns) ? snapshot.columns : []
+    const rows = Array.isArray(snapshot.rows) ? snapshot.rows : []
+    if (!columns.length || !rows.length) return null
+    return snapshot
+  }
+
+  function renderProgressSnapshotCellLabel (cell) {
+    const safeCell = cell && typeof cell === 'object' ? cell : {}
+    if (!safeCell.label) return '<span class="text-muted small">—</span>'
+    const tone = String(safeCell.tone || '').trim().toLowerCase()
+    const toneMap = {
+      primary: 'text-bg-primary',
+      success: 'text-bg-success',
+      warning: 'text-bg-warning',
+      danger: 'text-bg-danger',
+      info: 'text-bg-info',
+      secondary: 'text-bg-secondary'
+    }
+    const badgeClass = toneMap[tone] || 'text-bg-success'
+    return `<span class="badge ${badgeClass}">${escapeHtml(safeCell.label)}</span>`
+  }
+
+  function renderProgressSnapshotPanel (run, snapshot) {
+    const columns = Array.isArray(snapshot.columns) ? snapshot.columns : []
+    const rows = Array.isArray(snapshot.rows) ? snapshot.rows : []
+    const footerCells = Array.isArray(snapshot.footer_cells) ? snapshot.footer_cells : []
+    const preparationLabel = snapshot.preparation_label || ''
+    const totalLabel = snapshot.total_label || ''
+    const nameLabel = snapshot.name_label || 'Library'
+    const typeLabel = snapshot.type_label || 'Type'
+    const maintenance = getMaintenanceSummary(run)
+    const prepRow = preparationLabel
+      ? `<div class="logscan-progress-inline-row"><span class="fw-semibold">Preparation</span><span class="badge text-bg-primary">${escapeHtml(preparationLabel)}</span></div>`
+      : ''
+    let maintenanceRow = ''
+    if (maintenance.hadPause) {
+      const maintText = maintenance.pauseSeconds > 0
+        ? formatSeconds(maintenance.pauseSeconds)
+        : `${maintenance.pauseCount || 1} pause${(maintenance.pauseCount || 1) === 1 ? '' : 's'}`
+      const maintDetails = maintenance.window ? ` <span class="text-muted small">(${escapeHtml(maintenance.window)})</span>` : ''
+      maintenanceRow = `<div class="logscan-progress-inline-row"><span class="fw-semibold">Maintenance</span><span class="badge text-bg-primary">${escapeHtml(maintText)}</span>${maintDetails}</div>`
+    }
+    const headCells = columns.map(column => `<th scope="col" class="text-end">${escapeHtml(column.label || column.key || '')}</th>`).join('')
+    const bodyRows = rows.map(row => {
+      const phaseCells = Array.isArray(row.phase_cells) ? row.phase_cells : []
+      const statusClass = row.status_class ? ` ${escapeHtml(row.status_class)}` : ''
+      const phaseHtml = columns.map((column, index) => `<td class="text-end">${renderProgressSnapshotCellLabel(phaseCells[index])}</td>`).join('')
+      return `
+        <tr>
+          <td>${escapeHtml(row.name || '—')}</td>
+          <td>${escapeHtml(row.type || '—')}</td>
+          <td><span class="badge${statusClass}">${escapeHtml(row.status || 'Pending')}</span></td>
+          ${phaseHtml}
+        </tr>
+      `
+    }).join('')
+    const footerHtml = columns.map((column, index) => {
+      const label = footerCells[index] || ''
+      return `<td class="text-end">${label ? renderProgressSnapshotCellLabel({ label, tone: 'success' }) : '<span class="text-muted small">—</span>'}</td>`
+    }).join('')
+    return `
+      <div class="logscan-progress-panel-inner">
+        ${prepRow}
+        ${maintenanceRow}
+        <div class="table-responsive logscan-progress-table-wrap" data-qs-sticky-first="true">
+          <table class="table table-sm table-striped mb-0 qs-incomplete-progress-table qs-analytics-progress-table">
+            <thead>
+              <tr>
+                <th scope="col">${escapeHtml(nameLabel)}</th>
+                <th scope="col">${escapeHtml(typeLabel)}</th>
+                <th scope="col">Status</th>
+                ${headCells}
+              </tr>
+            </thead>
+            <tbody>
+              ${bodyRows}
+            </tbody>
+            <tfoot>
+              <tr class="table-group-divider">
+                <th scope="row" class="fw-semibold">Total</th>
+                <td><span class="text-muted small">—</span></td>
+                <td>${totalLabel ? renderProgressSnapshotCellLabel({ label: totalLabel, tone: 'success' }) : '<span class="text-muted small">—</span>'}</td>
+                ${footerHtml}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    `
+  }
+
+  function renderProgressSnapshotCell (run, runKey) {
+    const snapshot = getProgressSnapshot(run)
+    if (!snapshot) return '<span class="text-muted">n/a</span>'
+    const expanded = expandedProgressRunKeys.has(runKey)
+    const buttonLabel = expanded ? 'Hide matrix' : 'View matrix'
+    return `
+      <div class="logscan-progress-head">
+        <button type="button"
+          class="btn nav-button btn-sm logscan-action-btn logscan-progress-toggle"
+          data-run-key="${escapeHtml(runKey)}"
+          aria-expanded="${expanded ? 'true' : 'false'}">
+          ${buttonLabel}
+        </button>
+      </div>
+      <div class="logscan-progress-panel${expanded ? '' : ' d-none'}" data-run-key="${escapeHtml(runKey)}">
+          ${renderProgressSnapshotPanel(run, snapshot)}
+      </div>
+    `
+  }
+
   function getQuietPeriodSummary (run) {
     const summary = run && run.quiet_period_summary && typeof run.quiet_period_summary === 'object'
       ? run.quiet_period_summary
@@ -551,6 +679,20 @@ $(document).ready(function () {
     return getCount(run, 'warning_count') + getCount(run, 'error_count') + getCount(run, 'trace_count')
   }
 
+  function getDisplayedItemsTotal (run) {
+    if (getRunToolName(run) === 'imagemaid') {
+      const cache = getCount(run, 'cache_line_count')
+      const debug = getCount(run, 'debug_count')
+      const info = getCount(run, 'info_count')
+      const warnings = getCount(run, 'warning_count')
+      const errors = getCount(run, 'error_count')
+      const critical = getCount(run, 'critical_count')
+      const traces = getCount(run, 'trace_count')
+      return cache + debug + info + warnings + errors + critical + traces
+    }
+    return getRunLibraryTotals(run).total
+  }
+
   function renderInfoDot (helpText) {
     return `<span class="logscan-info-dot" tabindex="0" title="${escapeHtml(helpText)}" data-help="${escapeHtml(helpText)}" aria-label="${escapeHtml(helpText)}">i</span>`
   }
@@ -602,22 +744,30 @@ $(document).ready(function () {
         renderCountChip('E', 'Errors', errors, 'error'),
         renderCountChip('Cr', 'Critical lines', critical, 'critical'),
         renderCountChip('T', 'Tracebacks', traces, 'trace'),
-        renderCountChip('Tot', 'Total counted lines', total, 'total')
+        renderCountChip('Items', 'Total counted lines', total, 'total')
       ].join('')
     }
 
+    const cache = getCount(run, 'cache_line_count')
+    const debug = getCount(run, 'debug_count')
+    const info = getCount(run, 'info_count')
     const warnings = getCount(run, 'warning_count')
     const errors = getCount(run, 'error_count')
+    const critical = getCount(run, 'critical_count')
     const traces = getCount(run, 'trace_count')
     const libraryTotals = getRunLibraryTotals(run)
     return [
+      renderCountChip('C', 'Cache lines', cache, 'cache'),
+      renderCountChip('D', 'Debug lines', debug, 'debug'),
+      renderCountChip('I', 'Info lines', info, 'info'),
       renderCountChip('W', 'Warnings', warnings, 'warning'),
       renderCountChip('E', 'Errors', errors, 'error'),
+      renderCountChip('Cr', 'Critical lines', critical, 'critical'),
       renderCountChip('T', 'Tracebacks', traces, 'trace'),
       renderCountChip('M', 'Movies', libraryTotals.movies, 'movie'),
       renderCountChip('S', 'Shows', libraryTotals.shows, 'show'),
       renderCountChip('Ep', 'Episodes', libraryTotals.episodes, 'episode'),
-      renderCountChip('Tot', 'Total items', libraryTotals.total, 'total')
+      renderCountChip('Items', 'Library items total (movies + episodes, or show count when episode totals are unavailable)', libraryTotals.total, 'total')
     ].join('')
   }
 
@@ -1760,9 +1910,6 @@ $(document).ready(function () {
       const runtimeParts = getRunTimeParts(run)
       const sectionLines = buildSectionDetails(run.section_runtimes, runtimeParts.effective)
       const sectionSummary = sectionLines.length ? sectionLines[0] : 'n/a'
-      const cacheLineCount = (typeof run.cache_line_count === 'number' && Number.isFinite(run.cache_line_count))
-        ? run.cache_line_count
-        : 'n/a'
       const sectionDetails = sectionLines.length > 1 ? sectionLines.slice(1) : []
       const rowKey = (run.run_key && String(run.run_key).trim()) || `row-${absoluteIndex + 1}`
       sectionDetailsByRunKey.set(rowKey, {
@@ -1784,11 +1931,16 @@ $(document).ready(function () {
       sectionCell += `<span class="logscan-section-summary">${escapeHtml(sectionSummary)}</span>`
       sectionCell += '</div>'
       const toolLabel = getRunToolLabel(run)
+      const progressLabel = getRunToolName(run) === 'imagemaid' ? 'Operation matrix' : 'Progress matrix'
+      const progressHelpText = getRunToolName(run) === 'imagemaid'
+        ? 'Stored ImageMaid operation matrix for this run, including observed scan/action timings, item counts, and outcomes.'
+        : 'Inline final progress snapshot for this run, including preparation, maintenance context, and per-library phase status.'
       let kometaDisplay = run.kometa_version || 'n/a'
       if (run.kometa_version && run.kometa_newest_version && run.kometa_version !== run.kometa_newest_version) {
         kometaDisplay = `${run.kometa_version} -> ${run.kometa_newest_version}`
       }
       const runKey = run.run_key || rowKey
+      const isProgressExpanded = expandedProgressRunKeys.has(runKey)
       const isSelectable = isRunSelectable(run)
       const isSelected = isSelectable && selectedRunKeys.has(runKey)
       const statusDisplay = run.is_incomplete ? 'Incomplete' : 'Complete'
@@ -1834,8 +1986,12 @@ $(document).ready(function () {
       if (run.is_incomplete && run.resume_reason) {
         logActions.push(`<span class="small text-warning">${escapeHtml(run.resume_reason)}</span>`)
       }
+      const rowClasses = [
+        isSelected ? 'logscan-row-selected' : '',
+        isProgressExpanded ? 'logscan-row-progress-expanded' : ''
+      ].filter(Boolean).join(' ')
       return `
-        <tr class="${isSelected ? 'logscan-row-selected' : ''}">
+        <tr class="${rowClasses}">
           ${renderRunCardCell('Select', 'Select this archived log for bulk actions.', `
             <span class="logscan-select-wrap">
               <span class="form-check form-switch logscan-select-switch">
@@ -1853,14 +2009,14 @@ $(document).ready(function () {
           ${renderRunCardCell('Finished', 'Timestamp of the run finishing. Incomplete logs are shown here for investigation only and are excluded from charts.', finishedDisplay, 'class="text-nowrap"')}
           ${renderRunCardCell('Runtime', getRuntimeHelpText(run), escapeHtml(formatSeconds(runtimeParts.effective)))}
           ${renderRunCardCell('Config', 'Config name detected for the run.', escapeHtml(run.config_name || 'default'))}
-          ${renderRunCardCell('Tool', 'Tool that produced this run.', escapeHtml(toolLabel))}
+          ${renderRunCardCell('App', 'App that produced this run.', escapeHtml(toolLabel))}
           ${renderRunCardCell('Config lines', 'Non-comment lines captured from the redacted config output.', escapeHtml(String(configLineCount)))}
-          ${renderRunCardCell('Cache lines', 'Number of log lines that include "from Cache".', escapeHtml(String(cacheLineCount)))}
           ${renderRunCardCell('Command', 'Sanitized command line captured for the run.', `<span class="logscan-command" title="${escapeHtml(commandTitle)}">${escapeHtml(command)}</span>`)}
-          ${renderRunCardCell('Counts', 'W warnings, E errors, T tracebacks, M movies, S shows, Ep episodes, Tot total library items.', `<span class="logscan-count-chip-row">${countChips}</span>`)}
+          ${renderRunCardCell('Counts', 'Kometa: C cache, D debug, I info, W warnings, E errors, Cr critical, T tracebacks, plus M movies, S shows, Ep episodes, and Items total. ImageMaid: C D I W E Cr T plus Items total.', `<span class="logscan-count-chip-row">${countChips}</span>`)}
           ${renderRunCardCell('Version', 'Detected tool version for the run, plus newest version when different.', escapeHtml(kometaDisplay))}
           ${renderRunCardCell('Maintenance', 'Quickstart maintenance pauses recorded in meta.log for this run.', renderMaintenanceSummaryCell(run))}
           ${renderRunCardCell('Quiet periods', 'Emphasizes the longest unexplained delay between timestamped run log lines, with maintenance-related gaps available in the details view.', renderQuietPeriodCell(run))}
+          ${renderRunCardCell(progressLabel, progressHelpText, renderProgressSnapshotCell(run, runKey), 'class="logscan-progress-cell"')}
           ${renderRunCardCell('Section runtimes', 'Runtime totals parsed per run section when available.', sectionCell)}
           ${renderRunCardCell('Log size', 'Current on-disk size of the resolved log file when available, otherwise the ingested size.', escapeHtml(formatBytes(sizeBytes)))}
           ${renderRunCardCell('Log', 'Download the source log for this run. Archived plain logs can also be compressed, and archived logs can be deleted here.', `<div class="logscan-action-stack">${logActions.join('')}</div>`)}
@@ -2306,7 +2462,10 @@ $(document).ready(function () {
       case 'counts':
         return getCountsTotal(run)
       case 'warning_count':
+      case 'debug_count':
+      case 'info_count':
       case 'error_count':
+      case 'critical_count':
       case 'trace_count':
         return getCount(run, key)
       case 'config_line_count':
@@ -2321,6 +2480,8 @@ $(document).ready(function () {
         return getRunLibraryTotals(run).episodes
       case 'library_total':
         return getRunLibraryTotals(run).total
+      case 'items_total':
+        return getDisplayedItemsTotal(run)
       case 'kometa_version':
         return run.kometa_version || ''
       case 'maintenance':
@@ -3423,6 +3584,7 @@ $(document).ready(function () {
   }
 
   $limit.on('change', function () {
+    syncMirroredControlValue($limit, this)
     tablePage = 1
     fetchRuns()
   })
@@ -3462,32 +3624,39 @@ $(document).ready(function () {
     })
   }
   $configFilter.on('change', function () {
+    syncMirroredControlValue($configFilter, this)
     tablePage = 1
     loadPreferences().then(() => applyFiltersAndRender())
   })
   $toolFilter.on('change', function () {
+    syncMirroredControlValue($toolFilter, this)
     tablePage = 1
     clearDateFilters()
     applyFiltersAndRender()
   })
   $timeRange.on('change', function () {
+    syncMirroredControlValue($timeRange, this)
     tablePage = 1
     clearDateFilters()
     applyFiltersAndRender()
   })
   $commandFilter.on('change', function () {
+    syncMirroredControlValue($commandFilter, this)
     tablePage = 1
     applyFiltersAndRender()
   })
   $dateStart.on('change', function () {
+    syncMirroredControlValue($dateStart, this)
     tablePage = 1
     applyFiltersAndRender()
   })
   $dateEnd.on('change', function () {
+    syncMirroredControlValue($dateEnd, this)
     tablePage = 1
     applyFiltersAndRender()
   })
   $libraryFilter.on('change', function () {
+    syncMirroredControlValue($libraryFilter, this)
     renderLibraryInventory(currentFilteredRuns)
   })
   $countsSeries.on('click', '.logscan-series-toggle', function () {
@@ -3578,6 +3747,16 @@ $(document).ready(function () {
   $tableBody.on('click', '.logscan-run-details', function () {
     const runKey = $(this).data('runKey') || $(this).attr('data-run-key')
     showRunDetails(runKey)
+  })
+  $tableBody.on('click', '.logscan-progress-toggle', function () {
+    const runKey = $(this).data('runKey') || $(this).attr('data-run-key')
+    if (!runKey) return
+    if (expandedProgressRunKeys.has(runKey)) {
+      expandedProgressRunKeys.delete(runKey)
+    } else {
+      expandedProgressRunKeys.add(runKey)
+    }
+    renderTable(currentTableRuns)
   })
   $tableBody.on('change', '.logscan-select-toggle-input', function () {
     const runKey = $(this).data('runKey') || $(this).attr('data-run-key')
