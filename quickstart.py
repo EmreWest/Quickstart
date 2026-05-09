@@ -3098,7 +3098,7 @@ logscan_reingest_state = {
 # Bump this integer when a release needs a one-time Analytics reset + log reingest
 # on startup. Quickstart persists the highest successful level to config/.env so
 # skipped releases still catch up automatically.
-REQUIRED_LOGSCAN_MIGRATION_LEVEL = 8
+REQUIRED_LOGSCAN_MIGRATION_LEVEL = 9
 LOGSCAN_STARTUP_MIGRATIONS_ENV = "QS_LOGSCAN_STARTUP_MIGRATIONS"
 LOGSCAN_MIGRATION_LEVEL_DONE_ENV = "QS_LOGSCAN_MIGRATION_LEVEL_DONE"
 LOGSCAN_STARTUP_MIGRATION_JOB_ID = "startup-logscan-migration"
@@ -12465,6 +12465,7 @@ def _perform_logscan_reingest(reset, job_id=None, update_state=True):
                             "library_counts": summary.get("library_counts") if isinstance(summary.get("library_counts"), dict) else {},
                             "maintenance_summary": summary.get("maintenance_summary") if isinstance(summary.get("maintenance_summary"), dict) else {},
                             "quiet_period_summary": summary.get("quiet_period_summary") if isinstance(summary.get("quiet_period_summary"), dict) else {},
+                            "progress_snapshot": summary.get("progress_snapshot") if isinstance(summary.get("progress_snapshot"), dict) else {},
                             "quickstart_run_marker": bool(summary.get("quickstart_run_marker")),
                             "start_mode": summary.get("start_mode"),
                             "config_line_count": summary.get("config_line_count"),
