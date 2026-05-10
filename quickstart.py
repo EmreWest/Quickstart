@@ -4470,6 +4470,55 @@ def logscan_trends_log_delete():
     return jsonify(response)
 
 
+@app.route("/logscan/trends/log/invalid/delete", methods=["POST"])
+def logscan_trends_log_invalid_delete():
+    invalid_entries = _get_logscan_invalid_archived_logs()
+    if not invalid_entries:
+        return jsonify({"success": True, "deleted": 0, "results": [], "failures": []})
+
+    deleted = []
+    failures = []
+    for entry in invalid_entries:
+        raw_path = entry.get("path")
+        if not raw_path:
+            failures.append({"error": "Invalid archived log path missing.", "name": entry.get("name"), "status": 500})
+            continue
+        path = Path(raw_path)
+        deleted_file = False
+        try:
+            path.unlink()
+            deleted_file = True
+        except FileNotFoundError:
+            deleted_file = False
+        except Exception as exc:
+            failures.append({"error": f"Failed to delete invalid archived log: {exc}", "name": entry.get("name"), "path": raw_path, "status": 500})
+            continue
+        _remove_logscan_ingest_cache_entries(raw_path=str(path.resolve()))
+        deleted.append(
+            {
+                "name": entry.get("name"),
+                "path": raw_path,
+                "tool_name": entry.get("tool_name"),
+                "reason": entry.get("reason"),
+                "deleted_file": deleted_file,
+            }
+        )
+
+    if not deleted and failures:
+        first = failures[0]
+        return jsonify({"success": False, "error": first.get("error"), "failures": failures}), int(first.get("status", 500))
+
+    return jsonify(
+        {
+            "success": not failures,
+            "deleted": len(deleted),
+            "deleted_file_count": sum(1 for item in deleted if item.get("deleted_file")),
+            "results": deleted,
+            "failures": failures,
+        }
+    )
+
+
 @app.route("/logscan/trends/log/compress", methods=["POST"])
 def logscan_trends_log_compress():
     payload = request.get_json(silent=True) or {}
@@ -8775,6 +8824,7 @@ def _get_progress_library_list(selected_libraries=None, config_path=None, config
 def logscan_progress():
     kometa_root = helpers.get_kometa_root_path()
     log_path = kometa_root / "config" / "logs" / "meta.log"
+    sidecar_path = _get_kometa_maintenance_sidecar_path(kometa_root)
 
     if not log_path.exists():
         return jsonify({"error": f"Log file not found at: {log_path}"}), 404
@@ -8791,14 +8841,47 @@ def logscan_progress():
                 max_lines = max(1, min(int(size_param), 20000))
             except Exception:
                 max_lines = 4000
+        force_full_read = max_lines is None
 
         log_stats = None
         try:
             log_stats = log_path.stat()
         except Exception:
             log_stats = None
+        sidecar_stats = None
+        try:
+            if sidecar_path.exists():
+                sidecar_stats = sidecar_path.stat()
+        except Exception:
+            sidecar_stats = None
 
         cached = LOGSCAN_PROGRESS_CACHE
+
+        def _cache_matches_progress_signature():
+            if not log_stats:
+                return False
+            if cached.get("mtime") != log_stats.st_mtime or cached.get("size") != log_stats.st_size:
+                return False
+            cached_sidecar_mtime = cached.get("sidecar_mtime")
+            cached_sidecar_size = cached.get("sidecar_size")
+            current_sidecar_mtime = sidecar_stats.st_mtime if sidecar_stats else None
+            current_sidecar_size = sidecar_stats.st_size if sidecar_stats else None
+            return cached_sidecar_mtime == current_sidecar_mtime and cached_sidecar_size == current_sidecar_size
+
+        def _read_progress_log_content():
+            if force_full_read:
+                return _read_logscan_text(log_path)
+            with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+                lines = deque(handle, maxlen=max_lines)
+            content = "".join(lines)
+            try:
+                if sidecar_path.exists() and sidecar_path.is_file():
+                    sidecar_content = sidecar_path.read_text(encoding="utf-8", errors="replace").strip()
+                    if sidecar_content:
+                        content = f"{content.rstrip()}\n{sidecar_content}\n"
+            except Exception:
+                pass
+            return content
 
         def _coerce_progress_datetime(value):
             if not value:
@@ -8868,13 +8951,6 @@ def logscan_progress():
                             entry["status"] = "Stopped"
             return data
 
-        if max_lines:
-            with log_path.open("r", encoding="utf-8", errors="replace") as f:
-                lines = deque(f, maxlen=max_lines)
-            log_content = "".join(lines)
-        else:
-            log_content = log_path.read_text(encoding="utf-8", errors="replace")
-
         ctx = _get_run_context()
         selected = ctx.get("selected_libraries")
         started_at = ctx.get("started_at")
@@ -8890,17 +8966,19 @@ def logscan_progress():
         # cache is warm, later polls can safely use the faster tail parse.
         if size_arg is None and not cache_matches_run:
             max_lines = None
+            force_full_read = True
 
-        if log_stats and cached.get("mtime") == log_stats.st_mtime and cached.get("size") == log_stats.st_size:
+        if not force_full_read and _cache_matches_progress_signature():
             data = cached.get("data") or {}
             data = refresh_live_progress_elapsed(data, running, started_at)
             data = normalize_progress_for_stopped(data, running, stopped_requested)
             return jsonify(data)
 
         if cached_data and cached_data.get("run_started_at") != started_at:
-            LOGSCAN_PROGRESS_CACHE.update({"mtime": None, "size": None, "data": None})
+            LOGSCAN_PROGRESS_CACHE.update({"mtime": None, "size": None, "sidecar_mtime": None, "sidecar_size": None, "data": None})
         analyzer = logscan.LogscanAnalyzer()
         config_data = _load_progress_config(config_path)
+        log_content = _read_progress_log_content()
         progress = analyzer.extract_progress(
             log_content,
             library_list=_get_progress_library_list(
@@ -8926,11 +9004,22 @@ def logscan_progress():
         progress["allowed_phases"] = allowed_phases
         progress["phase_order"] = allowed_phases
         progress["playlists_configured"] = playlists_configured
+        maintenance_summary = analyzer.extract_maintenance_summary(log_content)
+        progress["maintenance_summary"] = maintenance_summary if isinstance(maintenance_summary, dict) else {}
+        progress["maintenance_had_pause"] = bool((progress.get("maintenance_summary") or {}).get("had_pause"))
         progress = normalize_progress_for_stopped(progress, running, stopped_requested)
         if log_stats:
             progress["last_log_at"] = datetime.fromtimestamp(log_stats.st_mtime, tz=timezone.utc).isoformat()
             progress["run_started_at"] = started_at
-            LOGSCAN_PROGRESS_CACHE.update({"mtime": log_stats.st_mtime, "size": log_stats.st_size, "data": progress})
+            LOGSCAN_PROGRESS_CACHE.update(
+                {
+                    "mtime": log_stats.st_mtime,
+                    "size": log_stats.st_size,
+                    "sidecar_mtime": sidecar_stats.st_mtime if sidecar_stats else None,
+                    "sidecar_size": sidecar_stats.st_size if sidecar_stats else None,
+                    "data": progress,
+                }
+            )
         return jsonify(progress)
     except Exception as e:
         return jsonify({"error": f"Failed to analyze log progress: {str(e)}"}), 500
@@ -11877,6 +11966,72 @@ def _logscan_needs_reingest(cache_logs, log_dir):
     return bool(_get_logscan_delta_files(log_dir=log_dir, include_archive=True))
 
 
+def _get_logscan_invalid_archived_logs(log_dir=None, limit=None):
+    log_dir = Path(log_dir) if log_dir else helpers.get_kometa_root_path() / "config" / "logs"
+    ingest_cache = _load_logscan_ingest_cache()
+    cache_logs = ingest_cache.get("logs", {}) if isinstance(ingest_cache, dict) else {}
+    if not isinstance(cache_logs, dict):
+        cache_logs = {}
+
+    invalid_logs = []
+    kometa_analyzer = None
+    for path in _get_logscan_log_files(log_dir=log_dir, include_archive=True):
+        if _classify_logscan_file_location(path, log_dir=log_dir) != "archive":
+            continue
+        cache_key = str(path.resolve())
+        cache_entry = cache_logs.get(cache_key)
+        if _logscan_cache_entry_matches(path, cache_entry=cache_entry):
+            continue
+
+        tool_name = _detect_logscan_tool_from_path(path, log_dir=log_dir)
+        reason = "unrecognized"
+        reason_detail = None
+        try:
+            content = _read_logscan_text(path, encoding="utf-8", errors="replace")
+            if tool_name == "imagemaid":
+                result = _analyze_imagemaid_log_content(content, log_path=path)
+            else:
+                if kometa_analyzer is None:
+                    kometa_analyzer = logscan.LogscanAnalyzer()
+                result = kometa_analyzer.analyze_content(content, log_path=path, include_people_scan=False)
+            summary = result.get("summary") if isinstance(result, dict) else None
+            if summary:
+                continue
+            if not str(content or "").strip():
+                reason = "empty"
+        except Exception as exc:
+            reason = "read_error"
+            reason_detail = str(exc)
+
+        try:
+            stats = path.stat()
+            size = int(stats.st_size)
+            mtime = stats.st_mtime
+        except Exception:
+            size = None
+            mtime = None
+        invalid_logs.append(
+            {
+                "name": path.name,
+                "path": cache_key,
+                "tool_name": tool_name,
+                "reason": reason,
+                "reason_detail": reason_detail,
+                "size": size,
+                "mtime": mtime,
+            }
+        )
+
+    invalid_logs.sort(key=lambda item: item.get("mtime") or 0, reverse=True)
+    if limit is None:
+        return invalid_logs
+    try:
+        safe_limit = max(0, int(limit))
+    except (TypeError, ValueError):
+        safe_limit = 0
+    return invalid_logs[:safe_limit]
+
+
 def _logscan_ingest_health(log_dir=None):
     log_dir = Path(log_dir) if log_dir else helpers.get_kometa_root_path() / "config" / "logs"
     log_dir_exists = log_dir.exists()
@@ -11919,6 +12074,7 @@ def _logscan_ingest_health(log_dir=None):
     if total < 0:
         total = 0
     needs_reingest = bool(missing or incomplete)
+    invalid_archived = _get_logscan_invalid_archived_logs(log_dir=log_dir)
 
     return {
         "source": "health",
@@ -11930,6 +12086,8 @@ def _logscan_ingest_health(log_dir=None):
         "incomplete": len(incomplete),
         "missing_sample": missing[:5],
         "incomplete_sample": incomplete[:5],
+        "invalid_archived_count": len(invalid_archived),
+        "invalid_archived_sample": [entry.get("name") for entry in invalid_archived[:5] if entry.get("name")],
         "needs_reingest": needs_reingest,
         "pending_active": pending_active,
         "last_updated": latest_updated,
