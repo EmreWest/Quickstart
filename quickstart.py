@@ -170,6 +170,7 @@ VALIDATION_REASON_LABELS = {
     "invalid_paths": "Invalid paths",
     "missing_library_defaults": "Missing library defaults",
     "missing_placeholder_imdb": "Missing placeholder IMDb ID",
+    "invalid_metadata_files": "Invalid metadata files",
     "invalid_fields": "Invalid fields",
     "no_webhooks": "No webhooks configured",
     "disabled": "Disabled",
@@ -397,6 +398,7 @@ QS_ERROR_REASONS = {
     "validation_error",
     "invalid_paths",
     "invalid_fields",
+    "invalid_metadata_files",
     "missing_library_defaults",
     "missing_placeholder_imdb",
 }
@@ -537,6 +539,76 @@ def _parse_json_array(value):
     except (TypeError, ValueError):
         return []
     return parsed if isinstance(parsed, list) else []
+
+
+def _parse_metadata_file_entries(value):
+    if isinstance(value, list):
+        raw_entries = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            raw_entries = json.loads(text)
+        except (TypeError, ValueError):
+            return None
+    else:
+        return []
+
+    if not isinstance(raw_entries, list):
+        return None
+
+    entries = []
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            continue
+        entry_type = str(entry.get("type") or "").strip().lower()
+        location = str(entry.get("location") or "").strip()
+        if not entry_type and not location:
+            continue
+        entries.append({"type": entry_type, "location": location})
+    return entries
+
+
+def _validate_library_metadata_files(libraries_data, selected_library_ids):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    errors = []
+    for lib_id in selected_library_ids or []:
+        raw_value = libraries_data.get(f"{lib_id}-metadata_files")
+        if raw_value in [None, "", "[]"]:
+            continue
+
+        entries = _parse_metadata_file_entries(raw_value)
+        if entries is None:
+            errors.append(f"{lib_id}: metadata_files must be a valid list.")
+            continue
+
+        for idx, entry in enumerate(entries, start=1):
+            valid, message, _details = validations._normalize_metadata_validation_result(
+                validations.validate_metadata_file_payload(
+                    {
+                        "metadata_file_type": entry.get("type"),
+                        "metadata_file_location": entry.get("location"),
+                    }
+                )
+            )
+            if not valid:
+                errors.append(f"{lib_id} metadata_files[{idx}]: {message}")
+
+    return errors
+
+
+def _selected_library_ids_from_libraries_data(libraries_data):
+    if not isinstance(libraries_data, dict):
+        return []
+
+    return [
+        key[: -len("-library")]
+        for key, value in libraries_data.items()
+        if isinstance(key, str) and key.startswith(("mov-library_", "sho-library_")) and key.endswith("-library") and _is_truthy_setting_value(value)
+    ]
 
 
 def _library_prefix_from_key(key):
@@ -5880,10 +5952,15 @@ def step(name):
         path_errors = path_validation.validate_payload(request.form)
         url_errors = url_validation.validate_payload(request.form)
         validation_errors = path_errors + url_errors
+        save_source, save_source_name = persistence.extract_names(request.referrer or name)
+        if save_source_name == "libraries":
+            clean_payload = persistence.clean_form_data(request.form)
+            incoming_libraries = helpers.build_config_dict("libraries", clean_payload).get("libraries", {})
+            selected_library_ids = _selected_library_ids_from_libraries_data(incoming_libraries)
+            validation_errors += _validate_library_metadata_files(incoming_libraries, selected_library_ids)
         if validation_errors:
             save_error = "Invalid values: " + " ".join(validation_errors)
         else:
-            save_source, save_source_name = persistence.extract_names(request.referrer or name)
             if save_source_name == "imagemaid":
                 request_payload = request.form.to_dict(flat=True)
                 request_payload["config_name"] = session.get("config_name") or request_payload.get("config_name") or request_payload.get("configSelector")
@@ -5980,6 +6057,12 @@ def step(name):
     page_info["header_style"] = header_style
     page_info["save_error"] = save_error
     page_info["template_name"] = name
+    settings_payload = persistence.retrieve_settings("150-settings") or {}
+    settings_section = settings_payload.get("settings", {}) if isinstance(settings_payload, dict) else {}
+    custom_repo_setting = str(settings_section.get("custom_repo") or "").strip()
+    custom_repo_base = validations._normalize_custom_repo_base(custom_repo_setting) or ""
+    page_info["settings_custom_repo"] = custom_repo_setting
+    page_info["settings_custom_repo_base"] = custom_repo_base
     if "shutdown_nonce" not in session:
         session["shutdown_nonce"] = secrets.token_urlsafe(16)
     if "restart_nonce" not in session:
@@ -6740,6 +6823,12 @@ def autosave_library(library_id):
         errors = path_validation.validate_payload(incoming)
         if errors:
             return jsonify({"success": False, "error": "Invalid path values.", "errors": errors}), 400
+        clean_payload = persistence.clean_form_data(MultiDict(incoming))
+        incoming_libraries = helpers.build_config_dict("libraries", clean_payload).get("libraries", {})
+        selected_library_ids = _selected_library_ids_from_libraries_data(incoming_libraries)
+        metadata_errors = _validate_library_metadata_files(incoming_libraries, selected_library_ids)
+        if metadata_errors:
+            return jsonify({"success": False, "error": "Invalid metadata files.", "errors": metadata_errors}), 400
         persistence.save_settings("025-libraries", incoming)
         return jsonify({"success": True})
     except Exception as e:
@@ -6982,6 +7071,7 @@ def copy_library_settings():
 
         source_items = {k: v for k, v in libraries_data.items() if k.startswith(f"{source_prefix}-")}
         source_errors = path_validation.validate_payload(source_items)
+        source_metadata_errors = _validate_library_metadata_files(libraries_data, [source_prefix])
         if source_errors:
             return (
                 jsonify(
@@ -6989,6 +7079,17 @@ def copy_library_settings():
                         "success": False,
                         "error": "Invalid path values found in source library: " + " ".join(source_errors),
                         "errors": source_errors,
+                    }
+                ),
+                400,
+            )
+        if source_metadata_errors:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Invalid metadata files found in source library: " + " ".join(source_metadata_errors),
+                        "errors": source_metadata_errors,
                     }
                 ),
                 400,
@@ -7941,12 +8042,15 @@ def validate_all_services():
         else:
             libraries_reason = None
             path_errors = path_validation.validate_payload(libraries_data)
+            metadata_file_errors = _validate_library_metadata_files(libraries_data, selected_library_ids)
             if path_errors:
                 libraries_reason = "invalid_paths"
+            elif metadata_file_errors:
+                libraries_reason = "invalid_metadata_files"
             else:
 
                 def has_minimal_library_yaml_selection(lib_id):
-                    allowed_markers = ("-collection_", "-overlay_", "-attribute_", "-top_level_")
+                    allowed_markers = ("-collection_", "-overlay_", "-attribute_", "-top_level_", "-metadata_files")
                     for key, value in libraries_data.items():
                         if not isinstance(key, str) or not key.startswith(f"{lib_id}-"):
                             continue
@@ -16057,6 +16161,12 @@ def purge_test_libraries():
 
     except Exception as e:
         return jsonify(success=False, message=f"Failed to delete folder:\n{str(e)}")
+
+
+@app.route("/validate_metadata_file", methods=["POST"])
+def validate_metadata_file():
+    data = request.get_json(silent=True) or {}
+    return validations.validate_metadata_file_server(data)
 
 
 @app.route("/restart", methods=["POST"])

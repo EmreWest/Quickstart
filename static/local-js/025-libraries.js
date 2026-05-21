@@ -1,4 +1,4 @@
-/* global EventHandler, ValidationHandler, OverlayHandler, Sortable, showToast, setupParentChildToggleSync, bootstrap, FontFace, PathValidation, DOMParser, showNavigationLoadingOverlay, hideNavigationLoadingOverlay */
+/* global EventHandler, ValidationHandler, OverlayHandler, Sortable, showToast, setupParentChildToggleSync, bootstrap, FontFace, PathValidation, DOMParser, MutationObserver, jumpTo, showNavigationLoadingOverlay, hideNavigationLoadingOverlay */
 
 document.addEventListener('DOMContentLoaded', function () {
   console.log('[DEBUG] Initializing Libraries...')
@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const copyModal = copyModalEl ? new bootstrap.Modal(copyModalEl) : null
     let activeLibraryId = null
     let loadRequestId = 0
+    let allowNextStepNavigation = false
     const dependencyHintConfigs = {
       tautulli: {
         stepKey: '030-tautulli',
@@ -103,6 +104,471 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     let dependencyHintRefreshTimer = null
     let dependencyHintRequestToken = 0
+
+    function normalizeMetadataFileEntry (entry) {
+      if (!entry || typeof entry !== 'object') return null
+      const type = String(entry.type || '').trim().toLowerCase()
+      const location = String(entry.location || '').trim()
+      if (!type && !location) return null
+      return { type, location }
+    }
+
+    function parseMetadataFilesValue (rawValue) {
+      if (!rawValue) return []
+      try {
+        const parsed = JSON.parse(String(rawValue))
+        if (!Array.isArray(parsed)) return []
+        return parsed
+          .map(normalizeMetadataFileEntry)
+          .filter(Boolean)
+      } catch (_error) {
+        return []
+      }
+    }
+
+    const metadataCustomRepoRaw = String(window.QS_SETTINGS_CUSTOM_REPO || '').trim()
+    const metadataCustomRepoBase = String(window.QS_SETTINGS_CUSTOM_REPO_BASE || '').trim()
+    const metadataRepoDependencyMessage = 'Metadata file repo entries require Custom Repo to be configured and saved first within the Settings page.'
+
+    function appendMetadataSettingsLink (target, className = 'link-light fw-semibold text-decoration-underline') {
+      const link = document.createElement('a')
+      link.href = '/step/150-settings#custom_repo'
+      link.textContent = 'Settings'
+      link.className = className
+      target.appendChild(link)
+      return link
+    }
+
+    function buildMetadataFileRow (entry = {}) {
+      const wrapper = document.createElement('div')
+      wrapper.className = 'card bg-body-tertiary border-secondary'
+      wrapper.setAttribute('data-metadata-file-row', 'true')
+      wrapper.innerHTML = `
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-2">
+              <label class="form-label small text-muted">Type</label>
+              <select class="form-select form-select-sm" data-metadata-file-type>
+                <option value="file">file</option>
+                <option value="folder">folder</option>
+                <option value="git">git</option>
+                <option value="repo">repo</option>
+                <option value="url">url</option>
+              </select>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label small text-muted">Location</label>
+              <input type="text" class="form-control form-control-sm" data-metadata-file-location placeholder="config/metadata.yml, config/metadata/, user/file.yml, or https://example.com/metadata.yml">
+            </div>
+            <div class="col-md-3 d-flex gap-2 justify-content-md-end">
+              <button type="button" class="btn btn-success btn-sm" data-validate-metadata-file>Validate</button>
+              <button type="button" class="btn btn-danger btn-sm" data-remove-metadata-file>Remove</button>
+            </div>
+          </div>
+          <div class="mt-2 small d-none" data-metadata-file-status></div>
+        </div>
+      `
+      const typeSelect = wrapper.querySelector('[data-metadata-file-type]')
+      const locationInput = wrapper.querySelector('[data-metadata-file-location]')
+      if (typeSelect && ['file', 'folder', 'git', 'repo', 'url'].includes(entry.type)) {
+        typeSelect.value = entry.type
+      }
+      if (locationInput && entry.location) {
+        locationInput.value = entry.location
+      }
+      updateMetadataFileValidateButton(wrapper, false)
+      return wrapper
+    }
+
+    function updateMetadataFileValidateButton (row, isValidated) {
+      if (!row) return
+      const button = row.querySelector('[data-validate-metadata-file]')
+      if (!button) return
+      const state = String(row.dataset.metadataFileButtonState || '').trim() || (isValidated ? 'success' : 'idle')
+      button.classList.remove('btn-success', 'btn-secondary')
+      if (state === 'success') {
+        button.disabled = true
+        button.classList.add('btn-secondary')
+        button.textContent = 'Validated'
+        return
+      }
+      if (state === 'blocked') {
+        button.disabled = true
+        button.classList.add('btn-secondary')
+        button.textContent = 'Needs Repo'
+        return
+      }
+      if (state === 'loading') {
+        button.disabled = true
+        button.classList.add('btn-secondary')
+        button.textContent = 'Validating...'
+        return
+      }
+      button.disabled = false
+      button.classList.add('btn-success')
+      button.textContent = 'Validate'
+    }
+
+    function setMetadataFileButtonState (row, state) {
+      if (!row) return
+      row.dataset.metadataFileButtonState = state || 'idle'
+      updateMetadataFileValidateButton(row, state === 'success')
+    }
+
+    function updateMetadataCustomRepoStatus (editor) {
+      if (!editor) return
+      const target = editor.querySelector('[data-metadata-custom-repo-status]')
+      if (!target) return
+
+      target.replaceChildren()
+      target.className = 'alert small mb-3'
+      if (!metadataCustomRepoBase) {
+        target.classList.add('alert-warning')
+        target.append('Custom Repo is not configured. ')
+        target.append('Use ')
+        appendMetadataSettingsLink(target, 'alert-link fw-semibold')
+        target.append(' to configure and save it before using ')
+        const code = document.createElement('code')
+        code.textContent = 'repo'
+        target.appendChild(code)
+        target.append(' metadata files.')
+        return
+      }
+
+      target.classList.add('alert-secondary')
+      const label = document.createElement('div')
+      label.className = 'fw-semibold mb-1'
+      label.textContent = 'Custom Repo base used for repo entries'
+      target.appendChild(label)
+
+      const baseValue = document.createElement('code')
+      baseValue.textContent = metadataCustomRepoBase
+      target.appendChild(baseValue)
+
+      if (metadataCustomRepoRaw && metadataCustomRepoRaw !== metadataCustomRepoBase) {
+        const savedValue = document.createElement('div')
+        savedValue.className = 'mt-2'
+        savedValue.append('Saved Custom Repo value: ')
+        const savedCode = document.createElement('code')
+        savedCode.textContent = metadataCustomRepoRaw
+        savedValue.appendChild(savedCode)
+        target.appendChild(savedValue)
+      }
+
+      const hint = document.createElement('div')
+      hint.className = 'mt-2'
+      hint.append('Change it in ')
+      appendMetadataSettingsLink(hint, 'alert-link fw-semibold')
+      hint.append('.')
+      target.appendChild(hint)
+    }
+
+    function applyMetadataFileDependencyState (row, opts = {}) {
+      if (!row) return false
+      const skipStatus = Boolean(opts.skipStatus)
+      const type = row.querySelector('[data-metadata-file-type]')?.value || ''
+      if (type !== 'repo') {
+        if (row.dataset.metadataFileDependency === 'repo-missing') {
+          row.dataset.metadataFileDependency = ''
+        }
+        return false
+      }
+
+      if (metadataCustomRepoBase) {
+        if (row.dataset.metadataFileDependency === 'repo-missing') {
+          row.dataset.metadataFileDependency = ''
+        }
+        return false
+      }
+
+      row.dataset.metadataFileDependency = 'repo-missing'
+      setMetadataFileButtonState(row, 'blocked')
+      if (!skipStatus) {
+        setMetadataFileStatus(row, 'error', metadataRepoDependencyMessage)
+      }
+      return true
+    }
+
+    function renderMetadataFileStatusMessage (target, message) {
+      target.replaceChildren()
+      if (!message) return
+
+      if (typeof message === 'object' && message !== null) {
+        const text = String(message.text || message.message || '').trim()
+        const files = Array.isArray(message.files) ? message.files.filter(Boolean) : []
+        if (text) {
+          const summary = document.createElement('div')
+          summary.textContent = text
+          target.appendChild(summary)
+        }
+        if (files.length) {
+          if (files.length <= 5) {
+            const list = document.createElement('ul')
+            list.className = 'mb-0 mt-1 ps-3'
+            files.forEach(file => {
+              const item = document.createElement('li')
+              const code = document.createElement('code')
+              code.textContent = file
+              item.appendChild(code)
+              list.appendChild(item)
+            })
+            target.appendChild(list)
+          } else {
+            const details = document.createElement('details')
+            details.className = 'mt-1'
+            const summary = document.createElement('summary')
+            summary.className = 'cursor-pointer'
+            summary.textContent = 'Show files'
+            details.appendChild(summary)
+            const list = document.createElement('ul')
+            list.className = 'mb-0 mt-1 ps-3'
+            files.forEach(file => {
+              const item = document.createElement('li')
+              const code = document.createElement('code')
+              code.textContent = file
+              item.appendChild(code)
+              list.appendChild(item)
+            })
+            details.appendChild(list)
+            target.appendChild(details)
+          }
+        }
+        return
+      }
+
+      const text = String(message || '').trim()
+      if (!text) return
+
+      if (text === metadataRepoDependencyMessage) {
+        target.append('Metadata file repo entries require Custom Repo to be configured and saved first within the ')
+        appendMetadataSettingsLink(target)
+        target.append(' page.')
+        return
+      }
+
+      target.textContent = text
+    }
+
+    function setMetadataFileStatus (row, kind, message) {
+      if (!row) return
+      const target = row.querySelector('[data-metadata-file-status]')
+      if (!target) return
+      row.dataset.metadataFileState = kind || ''
+      target.className = 'mt-2 small'
+      if (!message) {
+        target.classList.add('d-none')
+        target.textContent = ''
+        if (applyMetadataFileDependencyState(row, { skipStatus: true })) {
+          setMetadataFileButtonState(row, 'blocked')
+        } else {
+          setMetadataFileButtonState(row, 'idle')
+        }
+        const editor = row.closest('[data-metadata-files-editor]')
+        if (editor) updateMetadataFilesAccordionState(editor)
+        return
+      }
+      target.classList.remove('d-none')
+      if (kind === 'success') {
+        target.classList.add('text-success')
+      } else if (kind === 'error') {
+        target.classList.add('text-danger')
+      } else {
+        target.classList.add('text-warning')
+      }
+      renderMetadataFileStatusMessage(target, message)
+      if (kind === 'success') {
+        setMetadataFileButtonState(row, 'success')
+      } else if (row.dataset.metadataFileDependency === 'repo-missing') {
+        setMetadataFileButtonState(row, 'blocked')
+      } else {
+        setMetadataFileButtonState(row, 'idle')
+      }
+      const editor = row.closest('[data-metadata-files-editor]')
+      if (editor) updateMetadataFilesAccordionState(editor)
+    }
+
+    function updateMetadataFilesAccordionState (editor) {
+      if (!editor) return
+      const accordionItem = editor.closest('.accordion-item')
+      const accordionHeader = accordionItem?.querySelector(':scope > .accordion-header')
+      if (!accordionHeader) return
+
+      const rows = Array.from(editor.querySelectorAll('[data-metadata-file-row]'))
+      const hasEntries = rows.some(row => {
+        const type = row.querySelector('[data-metadata-file-type]')?.value || ''
+        const location = row.querySelector('[data-metadata-file-location]')?.value || ''
+        return Boolean(normalizeMetadataFileEntry({ type, location }))
+      })
+      const hasInvalid = rows.some(row => {
+        const state = String(row.dataset.metadataFileState || '').trim().toLowerCase()
+        return state === 'error' || state === 'warning'
+      })
+
+      accordionHeader.classList.remove('invalid')
+      if (hasInvalid) {
+        accordionHeader.classList.add('invalid')
+        return
+      }
+
+      accordionHeader.classList.remove('warning')
+      if (hasEntries) {
+        accordionHeader.classList.add('selected')
+      } else {
+        accordionHeader.classList.remove('selected')
+      }
+    }
+
+    function applyMetadataFileServerErrors (editor, errors) {
+      if (!editor || !Array.isArray(errors) || !errors.length) return false
+      const rows = Array.from(editor.querySelectorAll('[data-metadata-file-row]'))
+      rows.forEach(row => setMetadataFileStatus(row, '', ''))
+      let applied = false
+      errors.forEach(error => {
+        const text = String(error || '').trim()
+        const match = text.match(/metadata_files\[(\d+)\]:\s*(.+)$/i)
+        if (!match) return
+        const index = Number(match[1]) - 1
+        const message = match[2] || 'Validation failed.'
+        if (!Number.isInteger(index) || index < 0 || index >= rows.length) return
+        setMetadataFileStatus(rows[index], 'error', message)
+        applied = true
+      })
+      return applied
+    }
+
+    function syncMetadataFilesEditor (editor, emitEvents = true) {
+      if (!editor) return []
+      const hidden = editor.querySelector('input[type="hidden"][name$="-metadata_files"]')
+      if (!hidden) return []
+      const rows = Array.from(editor.querySelectorAll('[data-metadata-file-row]'))
+      const entries = rows.map(row => {
+        const type = row.querySelector('[data-metadata-file-type]')?.value
+        const location = row.querySelector('[data-metadata-file-location]')?.value
+        return normalizeMetadataFileEntry({ type, location })
+      }).filter(Boolean)
+      hidden.value = JSON.stringify(entries)
+      if (emitEvents) {
+        hidden.dispatchEvent(new Event('input', { bubbles: true }))
+        hidden.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      updateMetadataFilesAccordionState(editor)
+      return entries
+    }
+
+    function renderMetadataFilesEditor (editor) {
+      if (!editor) return
+      const hidden = editor.querySelector('input[type="hidden"][name$="-metadata_files"]')
+      const list = editor.querySelector('[data-metadata-files-list]')
+      if (!hidden || !list) return
+      updateMetadataCustomRepoStatus(editor)
+      const entries = parseMetadataFilesValue(hidden.value)
+      list.replaceChildren()
+      entries.forEach(entry => list.appendChild(buildMetadataFileRow(entry)))
+      list.querySelectorAll('[data-metadata-file-row]').forEach(row => {
+        if (applyMetadataFileDependencyState(row)) return
+        setMetadataFileButtonState(row, 'idle')
+      })
+      syncMetadataFilesEditor(editor, false)
+      updateMetadataFilesAccordionState(editor)
+    }
+
+    function initMetadataFilesEditors (scope) {
+      const root = scope || document
+      root.querySelectorAll('[data-metadata-files-editor]').forEach(editor => {
+        if (editor.dataset.metadataFilesReady === 'true') return
+        renderMetadataFilesEditor(editor)
+        editor.dataset.metadataFilesReady = 'true'
+      })
+    }
+
+    document.addEventListener('click', async function (event) {
+      const addButton = event.target.closest('[data-add-metadata-file]')
+      if (addButton) {
+        const editor = addButton.closest('[data-metadata-files-editor]')
+        const list = editor?.querySelector('[data-metadata-files-list]')
+        if (!editor || !list) return
+        list.appendChild(buildMetadataFileRow({ type: 'file', location: '' }))
+        syncMetadataFilesEditor(editor)
+        return
+      }
+
+      const removeButton = event.target.closest('[data-remove-metadata-file]')
+      if (removeButton) {
+        const row = removeButton.closest('[data-metadata-file-row]')
+        const editor = removeButton.closest('[data-metadata-files-editor]')
+        if (!row || !editor) return
+        row.remove()
+        syncMetadataFilesEditor(editor)
+        return
+      }
+
+      const validateButton = event.target.closest('[data-validate-metadata-file]')
+      if (validateButton) {
+        const row = validateButton.closest('[data-metadata-file-row]')
+        const editor = validateButton.closest('[data-metadata-files-editor]')
+        if (!row || !editor) return
+        if (applyMetadataFileDependencyState(row)) return
+        const type = row.querySelector('[data-metadata-file-type]')?.value || ''
+        const location = row.querySelector('[data-metadata-file-location]')?.value || ''
+        syncMetadataFilesEditor(editor, false)
+        setMetadataFileStatus(row, '', 'Validating...')
+        setMetadataFileButtonState(row, 'loading')
+        try {
+          const response = await fetch('/validate_metadata_file', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              metadata_file_type: type,
+              metadata_file_location: location
+            })
+          })
+          const payload = await response.json().catch(() => ({}))
+          if (!response.ok || !payload.valid) {
+            setMetadataFileStatus(row, 'error', payload.error || 'Validation failed.')
+          } else {
+            setMetadataFileStatus(row, 'success', {
+              text: payload.message || 'Metadata source looks valid.',
+              files: Array.isArray(payload.files) ? payload.files : []
+            })
+          }
+        } catch (_error) {
+          setMetadataFileStatus(row, 'error', 'Validation request failed.')
+        } finally {
+          if (row.dataset.metadataFileState !== 'success' && row.dataset.metadataFileDependency !== 'repo-missing') {
+            setMetadataFileButtonState(row, 'idle')
+          }
+        }
+      }
+    })
+
+    document.addEventListener('input', function (event) {
+      const target = event.target
+      if (!target || !target.closest('[data-metadata-files-editor]')) return
+      if (!target.matches('[data-metadata-file-type], [data-metadata-file-location]')) return
+      const row = target.closest('[data-metadata-file-row]')
+      const editor = target.closest('[data-metadata-files-editor]')
+      setMetadataFileStatus(row, '', '')
+      applyMetadataFileDependencyState(row)
+      syncMetadataFilesEditor(editor)
+    })
+
+    document.addEventListener('change', function (event) {
+      const target = event.target
+      if (!target || !target.closest('[data-metadata-files-editor]')) return
+      if (!target.matches('[data-metadata-file-type], [data-metadata-file-location]')) return
+      const row = target.closest('[data-metadata-file-row]')
+      const editor = target.closest('[data-metadata-files-editor]')
+      setMetadataFileStatus(row, '', '')
+      applyMetadataFileDependencyState(row)
+      syncMetadataFilesEditor(editor)
+    })
+
+    initMetadataFilesEditors(document)
+    if (libraryContainer && typeof MutationObserver !== 'undefined') {
+      const metadataObserver = new MutationObserver(() => initMetadataFilesEditors(libraryContainer))
+      metadataObserver.observe(libraryContainer, { childList: true, subtree: true })
+    }
 
     // Ensure hidden "false" inputs don't submit alongside checked checkboxes with the same name
     function syncHiddenCheckboxPairs (scope) {
@@ -1434,6 +1900,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       const payload = buildPayloadFromCard(card)
+      const metadataEditor = card.querySelector('[data-metadata-files-editor]')
       const option = libraryPicker?.querySelector(`option[value="${activeLibraryId}"]`)
       const friendlyName = option?.dataset.label || option?.textContent?.trim() || activeLibraryId
 
@@ -1444,7 +1911,15 @@ document.addEventListener('DOMContentLoaded', function () {
         body: JSON.stringify(payload)
       })
         .then(res => {
-          if (!res.ok) throw new Error(`Autosave failed: ${res.status}`)
+          if (!res.ok) {
+            return res.json().catch(() => ({})).then(body => {
+              if (metadataEditor) {
+                applyMetadataFileServerErrors(metadataEditor, body && body.errors)
+              }
+              const message = body && body.error ? body.error : `Autosave failed: ${res.status}`
+              throw new Error(message)
+            })
+          }
           return res.json().catch(() => ({}))
         })
         .then(data => {
@@ -1460,7 +1935,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(err => {
           console.error('[Autosave] Failed to save library', activeLibraryId, err)
           if (typeof showToast === 'function') {
-            showToast('error', `Autosave failed for ${friendlyName}.`)
+            showToast('error', err.message || `Autosave failed for ${friendlyName}.`)
           }
           throw err
         })
@@ -1610,6 +2085,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function loadLibrary (libraryId, context = 'switch') {
       if (libraryId === activeLibraryId) return
       const requestId = ++loadRequestId
+      const previousLibraryId = activeLibraryId
       const setLoading = (flag) => {
         if (libraryLoading) {
           libraryLoading.classList.toggle('d-none', !flag)
@@ -1628,7 +2104,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       setLoading(true)
       autosaveActiveLibrary()
-        .finally(() => {
+        .then(() => {
           if (requestId !== loadRequestId) return
 
           if (!libraryId) {
@@ -1669,6 +2145,13 @@ document.addEventListener('DOMContentLoaded', function () {
               setLoading(false)
             })
         })
+        .catch(() => {
+          if (requestId !== loadRequestId) return
+          if (libraryPicker && previousLibraryId) {
+            libraryPicker.value = previousLibraryId
+          }
+          setLoading(false)
+        })
     }
 
     if (libraryPicker) {
@@ -1690,6 +2173,27 @@ document.addEventListener('DOMContentLoaded', function () {
         libraryPicker.value = ''
       }
     }
+
+    document.addEventListener('qs:before-step-navigation', (event) => {
+      const detail = (event && event.detail) || {}
+      if (allowNextStepNavigation) {
+        allowNextStepNavigation = false
+        return
+      }
+      if (!activeLibraryId || !libraryContainer || !libraryContainer.firstElementChild) return
+      if (!detail.targetPage || detail.targetPage === '025-libraries') return
+
+      event.preventDefault()
+
+      autosaveActiveLibrary()
+        .then(() => {
+          allowNextStepNavigation = true
+          jumpTo(detail.targetPage, detail.targetLabel)
+        })
+        .catch(() => {
+          allowNextStepNavigation = false
+        })
+    })
 
     if (typeof setupParentChildToggleSync === 'function') {
       setupParentChildToggleSync()
