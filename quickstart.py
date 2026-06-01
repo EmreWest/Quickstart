@@ -629,9 +629,13 @@ def _parse_metadata_file_entries(value):
             continue
         entry_type = str(entry.get("type") or "").strip().lower()
         location = str(entry.get("location") or "").strip()
+        validated = helpers.booler(entry.get("validated"))
         if not entry_type and not location:
             continue
-        entries.append({"type": entry_type, "location": location})
+        parsed_entry = {"type": entry_type, "location": location}
+        if validated:
+            parsed_entry["validated"] = True
+        entries.append(parsed_entry)
     return entries
 
 
@@ -658,9 +662,13 @@ def _parse_collection_file_entries(value):
             continue
         entry_type = str(entry.get("type") or "").strip().lower()
         location = str(entry.get("location") or "").strip()
+        validated = helpers.booler(entry.get("validated"))
         if not entry_type and not location:
             continue
-        entries.append({"type": entry_type, "location": location})
+        parsed_entry = {"type": entry_type, "location": location}
+        if validated:
+            parsed_entry["validated"] = True
+        entries.append(parsed_entry)
     return entries
 
 
@@ -687,9 +695,13 @@ def _parse_overlay_file_entries(value):
             continue
         entry_type = str(entry.get("type") or "").strip().lower()
         location = str(entry.get("location") or "").strip()
+        validated = helpers.booler(entry.get("validated"))
         if not entry_type and not location:
             continue
-        entries.append({"type": entry_type, "location": location})
+        parsed_entry = {"type": entry_type, "location": location}
+        if validated:
+            parsed_entry["validated"] = True
+        entries.append(parsed_entry)
     return entries
 
 
@@ -724,8 +736,65 @@ def _safe_external_artifact_slug(value, fallback="artifact"):
     return safe or fallback
 
 
-def _managed_library_file_root(kind):
-    return (Path(helpers.CONFIG_DIR) / kind).resolve()
+def _managed_library_folder_slug(source_path, kind):
+    raw_name = str(getattr(source_path, "name", "") or "").strip().lower()
+    folder_name = _safe_external_artifact_slug(getattr(source_path, "name", ""), "folder")
+    if raw_name in set(LIBRARY_FILE_KINDS):
+        parent_name = _safe_external_artifact_slug(getattr(source_path.parent, "name", ""), "")
+        if parent_name:
+            return f"{parent_name}_{folder_name}"
+    return folder_name
+
+
+def _managed_library_config_root(config_name):
+    config_slug = helpers.normalize_config_name_for_storage(config_name)
+    return (Path(helpers.CONFIG_DIR) / config_slug).resolve()
+
+
+def _managed_library_file_root(kind, config_name):
+    return (_managed_library_config_root(config_name) / kind).resolve()
+
+
+def _parse_managed_library_relative_path(path_value):
+    raw = str(path_value or "").strip().replace("\\", "/")
+    if not raw:
+        return None
+    parts = [part for part in raw.split("/") if part]
+    if not parts:
+        return None
+    has_config_prefix = parts[0] == "config"
+    if has_config_prefix:
+        parts = parts[1:]
+    if len(parts) >= 3 and parts[1] in LIBRARY_FILE_KINDS:
+        return {
+            "layout": "config_first",
+            "config_name": parts[0],
+            "kind": parts[1],
+            "remainder": parts[2:],
+            "has_config_prefix": has_config_prefix,
+            "parts": parts,
+        }
+    if len(parts) >= 3 and parts[0] in LIBRARY_FILE_KINDS:
+        return {
+            "layout": "type_first",
+            "config_name": parts[1],
+            "kind": parts[0],
+            "remainder": parts[2:],
+            "has_config_prefix": has_config_prefix,
+            "parts": parts,
+        }
+    return None
+
+
+def _normalized_managed_library_relative_path(path_value):
+    info = _parse_managed_library_relative_path(path_value)
+    if not info:
+        return None
+    return Path(info["config_name"], info["kind"], *info["remainder"]).as_posix()
+
+
+def _is_bundled_library_archive_member(path_value):
+    return _normalized_managed_library_relative_path(str(path_value or "").replace("\\", "/").lstrip("/")) is not None
 
 
 def _yaml_path_suffix(path_value):
@@ -748,6 +817,16 @@ def _resolve_local_library_source(location):
             return expanded.resolve()
         except OSError:
             return expanded
+    managed_info = _parse_managed_library_relative_path(expanded)
+    if managed_info:
+        if managed_info["layout"] == "config_first":
+            managed_relative = Path(managed_info["config_name"], managed_info["kind"], *managed_info["remainder"])
+        else:
+            managed_relative = Path(*managed_info["parts"])
+        try:
+            return (Path(helpers.CONFIG_DIR) / managed_relative).resolve()
+        except OSError:
+            return Path(helpers.CONFIG_DIR) / managed_relative
     normalized_parts = [part for part in str(expanded).replace("\\", "/").split("/") if part]
     if normalized_parts and normalized_parts[0] in LIBRARY_FILE_KINDS:
         try:
@@ -766,10 +845,23 @@ def _managed_bundle_location_for_path(path):
         relative = Path(path).resolve().relative_to(config_root)
     except Exception:
         return None
-    relative_parts = list(relative.parts)
-    if not relative_parts or relative_parts[0] not in LIBRARY_FILE_KINDS:
+    normalized_relative = _normalized_managed_library_relative_path(Path(*relative.parts).as_posix())
+    if not normalized_relative:
         return None
-    return Path(*relative_parts).as_posix()
+    info = _parse_managed_library_relative_path(normalized_relative)
+    if not info or info["layout"] != "config_first":
+        return None
+    return normalized_relative
+
+
+def _display_library_managed_location(location):
+    raw = str(location or "").strip().replace("\\", "/")
+    if not raw:
+        return raw
+    normalized_relative = _normalized_managed_library_relative_path(raw)
+    if normalized_relative:
+        return Path("config", *normalized_relative.split("/")).as_posix()
+    return raw
 
 
 def _validate_library_file_entry(kind, entry):
@@ -797,21 +889,20 @@ def _remove_managed_path(path, root):
         resolved_path.unlink()
 
 
-def _copy_library_artifact_to_managed_store(kind, entry_type, location, config_name, library_scope):
+def _copy_library_artifact_to_managed_store(kind, entry_type, location, config_name, library_scope, force_clone_managed=False):
     source_path = _resolve_local_library_source(location)
     if source_path is None:
         raise RuntimeError("Path is required.")
 
     managed_location = _managed_bundle_location_for_path(source_path)
-    if managed_location:
+    if managed_location and not force_clone_managed:
         return managed_location
 
-    managed_root = _managed_library_file_root(kind)
-    config_slug = helpers.normalize_config_name_for_storage(config_name)
+    managed_root = _managed_library_file_root(kind, config_name)
     library_slug = _safe_external_artifact_slug(library_scope, "library")
     source_token = str(source_path).replace("\\", "/").lower()
     digest = hashlib.sha1(source_token.encode("utf-8", errors="ignore")).hexdigest()[:10]
-    target_dir = managed_root / config_slug / library_slug
+    target_dir = managed_root / library_slug
     target_dir.mkdir(parents=True, exist_ok=True)
 
     if entry_type == "file":
@@ -821,7 +912,7 @@ def _copy_library_artifact_to_managed_store(kind, entry_type, location, config_n
         if source_path != target_path:
             shutil.copy2(source_path, target_path)
     else:
-        folder_name = _safe_external_artifact_slug(source_path.name, "folder")
+        folder_name = _managed_library_folder_slug(source_path, kind)
         target_path = (target_dir / f"{folder_name}_{digest}").resolve()
         if source_path != target_path:
             if target_path.exists():
@@ -835,14 +926,18 @@ def _copy_library_artifact_to_managed_store(kind, entry_type, location, config_n
     return Path(*relative.parts).as_posix()
 
 
-def _normalize_library_external_entry(kind, entry, config_name, library_scope, validate_local=True):
+def _normalize_library_external_entry(kind, entry, config_name, library_scope, validate_local=True, force_clone_managed=False):
     parsed_entry = dict(entry) if isinstance(entry, dict) else {}
     entry_type = str(parsed_entry.get("type") or "").strip().lower()
     location = str(parsed_entry.get("location") or "").strip()
+    is_validated = helpers.booler(parsed_entry.get("validated"))
     if entry_type not in {"file", "folder", "url", "git", "repo"} or not location:
         return parsed_entry, False, None
     if entry_type not in LOCAL_LIBRARY_FILE_TYPES or not config_name or not library_scope:
-        return {"type": entry_type, "location": location}, False, None
+        normalized_entry = {"type": entry_type, "location": location}
+        if is_validated:
+            normalized_entry["validated"] = True
+        return normalized_entry, False, None
 
     if validate_local:
         valid, message, _details = _validate_library_file_entry(kind, {"type": entry_type, "location": location})
@@ -850,12 +945,46 @@ def _normalize_library_external_entry(kind, entry, config_name, library_scope, v
             return None, False, message
 
     try:
-        normalized_location = _copy_library_artifact_to_managed_store(kind, entry_type, location, config_name, library_scope)
+        normalized_location = _copy_library_artifact_to_managed_store(
+            kind,
+            entry_type,
+            location,
+            config_name,
+            library_scope,
+            force_clone_managed=force_clone_managed,
+        )
     except Exception as exc:
         return None, False, f"Unable to organize {kind}: {exc}"
 
-    changed = normalized_location != location
-    return {"type": entry_type, "location": normalized_location}, changed, None
+    display_location = _display_library_managed_location(normalized_location)
+    changed = display_location != location
+    normalized_entry = {"type": entry_type, "location": display_location}
+    if is_validated:
+        normalized_entry["validated"] = True
+    return normalized_entry, changed, None
+
+
+def _clone_library_file_entries_for_target(kind, raw_value, config_name, target_library_id):
+    parser = LIBRARY_FILE_PARSE_FUNCTIONS.get(kind)
+    if not parser:
+        return raw_value
+    entries = parser(raw_value)
+    if entries is None:
+        return raw_value
+    cloned_entries = []
+    for idx, entry in enumerate(entries, start=1):
+        normalized_entry, _changed, entry_error = _normalize_library_external_entry(
+            kind,
+            entry,
+            config_name,
+            target_library_id,
+            validate_local=False,
+            force_clone_managed=True,
+        )
+        if entry_error:
+            raise RuntimeError(f"{target_library_id} {kind}[{idx}]: {entry_error}")
+        cloned_entries.append(normalized_entry if normalized_entry is not None else entry)
+    return json.dumps(cloned_entries, ensure_ascii=True)
 
 
 def _normalize_library_file_entries_payload(libraries_data, config_name, validate_local=True):
@@ -936,6 +1065,10 @@ def _rewrite_bundle_library_paths(config_data, bundle_root):
                     raw_location = str(location).strip()
                     candidate = root / Path(raw_location)
                     if not candidate.exists():
+                        normalized_relative = _normalized_managed_library_relative_path(raw_location)
+                        if normalized_relative:
+                            candidate = root / Path(normalized_relative)
+                    if not candidate.exists():
                         continue
                     entry[entry_type] = str(candidate.resolve())
                     break
@@ -997,7 +1130,6 @@ def _iter_bundle_artifacts(config_data):
     if not isinstance(libraries, dict):
         return []
     artifacts = []
-    config_root = Path(helpers.CONFIG_DIR).resolve()
     for lib_cfg in libraries.values():
         if not isinstance(lib_cfg, dict):
             continue
@@ -1015,16 +1147,14 @@ def _iter_bundle_artifacts(config_data):
                     raw_location = str(location).strip()
                     if not raw_location:
                         continue
-                    source_path = Path(raw_location)
-                    if not source_path.is_absolute():
-                        source_path = (config_root / Path(raw_location)).resolve()
-                    else:
-                        source_path = source_path.resolve()
+                    source_path = _resolve_local_library_source(raw_location)
+                    if source_path is None:
+                        continue
                     if not source_path.exists():
                         continue
                     archive_path = _managed_bundle_location_for_path(source_path)
                     if not archive_path:
-                        archive_path = Path(raw_location).as_posix()
+                        archive_path = _normalized_managed_library_relative_path(raw_location) or Path(raw_location).as_posix()
                     dedupe_key = (str(source_path), archive_path)
                     if dedupe_key in seen:
                         break
@@ -3648,8 +3778,12 @@ def _rename_config_files(old_name: str, new_name: str, dry_run: bool = False) ->
     archive_root = config_dir / "archives"
     old_archive = archive_root / old_norm
     new_archive = archive_root / new_norm
+    old_managed_root = helpers.get_managed_config_artifact_root(old_norm)
+    new_managed_root = helpers.get_managed_config_artifact_root(new_norm)
     old_managed_dirs = helpers.get_managed_library_artifact_paths(old_norm)
     new_managed_dirs = helpers.get_managed_library_artifact_paths(new_norm)
+    old_legacy_managed_dirs = helpers.get_legacy_managed_library_artifact_paths(old_norm)
+    new_legacy_managed_dirs = helpers.get_legacy_managed_library_artifact_paths(new_norm)
     if old_archive.exists():
         if new_archive.exists():
             result["errors"].append("Target archive directory already exists.")
@@ -3661,9 +3795,21 @@ def _rename_config_files(old_name: str, new_name: str, dry_run: bool = False) ->
                 result["errors"].append(f"Archive file already exists: {target_name}")
                 return result
 
+    if old_managed_root.exists() and new_managed_root.exists():
+        result["errors"].append(f"Target managed config directory already exists: {new_managed_root}")
+        return result
+
     for old_managed, new_managed in zip(old_managed_dirs, new_managed_dirs):
         if old_managed.exists() and new_managed.exists():
             result["errors"].append(f"Target managed library directory already exists: {new_managed}")
+            return result
+    for old_managed, new_managed in zip(old_legacy_managed_dirs, new_managed_dirs):
+        if old_managed.exists() and new_managed.exists():
+            result["errors"].append(f"Target managed library directory already exists: {new_managed}")
+            return result
+    for old_managed, new_managed in zip(old_legacy_managed_dirs, new_legacy_managed_dirs):
+        if old_managed.exists() and new_managed.exists():
+            result["errors"].append(f"Target legacy managed library directory already exists: {new_managed}")
             return result
 
     if dry_run:
@@ -3680,7 +3826,18 @@ def _rename_config_files(old_name: str, new_name: str, dry_run: bool = False) ->
             kometa_file.rename(new_kometa_file)
             completed.append((kometa_file, new_kometa_file))
             result["renamed"].append(str(new_kometa_file))
+        if old_managed_root.exists():
+            new_managed_root.parent.mkdir(parents=True, exist_ok=True)
+            old_managed_root.rename(new_managed_root)
+            completed.append((old_managed_root, new_managed_root))
+            result["renamed"].append(str(new_managed_root))
         for old_managed, new_managed in zip(old_managed_dirs, new_managed_dirs):
+            if old_managed.exists():
+                new_managed.parent.mkdir(parents=True, exist_ok=True)
+                old_managed.rename(new_managed)
+                completed.append((old_managed, new_managed))
+                result["renamed"].append(str(new_managed))
+        for old_managed, new_managed in zip(old_legacy_managed_dirs, new_managed_dirs):
             if old_managed.exists():
                 new_managed.parent.mkdir(parents=True, exist_ok=True)
                 old_managed.rename(new_managed)
@@ -3731,7 +3888,6 @@ for folder in UPLOAD_FOLDERS.values():
 IMAGES_FOLDER = os.path.join(helpers.MEIPASS_DIR, "static", "images")
 OVERLAY_FOLDER = os.path.join(IMAGES_FOLDER, "overlays")
 FONTS_FOLDER = os.path.join(helpers.MEIPASS_DIR, "static", "fonts")
-CUSTOM_FONTS_FOLDER = os.path.join(helpers.CONFIG_DIR, "fonts")
 DEFAULT_IMAGE_MAP = {
     "movie": os.path.join(IMAGES_FOLDER, "default.png"),
     "show": os.path.join(IMAGES_FOLDER, "default-sho_preview.png"),
@@ -3753,7 +3909,7 @@ os.makedirs(PREVIEW_FOLDER, exist_ok=True)
 OVERLAY_CACHE_FOLDER = os.path.join(helpers.CONFIG_DIR, "cache", "overlays")
 os.makedirs(OVERLAY_CACHE_FOLDER, exist_ok=True)
 OVERLAY_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
-_FONT_CACHE: list[str] = []
+_FONT_CACHE: dict[str, list[str]] = {}
 
 
 def _list_preview_images_for_type(image_type: str) -> list[str]:
@@ -3794,11 +3950,13 @@ def _resolve_preview_base_image_path(img_type: str, selected_image: str) -> str:
 
 # Font discovery (TTF/OTF) across common static dirs
 def list_overlay_fonts() -> list[str]:
-    global _FONT_CACHE
-    if _FONT_CACHE:
-        return _FONT_CACHE
+    config_name = session.get("config_name") if has_request_context() else None
+    cache_key = helpers.normalize_config_name_for_storage(config_name) if config_name else "__default__"
+    cached = _FONT_CACHE.get(cache_key)
+    if cached:
+        return cached
     fonts: list[str] = []
-    font_dirs = helpers.get_font_dirs(include_static=True, include_custom=True)
+    font_dirs = helpers.get_font_dirs(include_static=True, include_custom=True, config_name=config_name)
     for fdir in font_dirs:
         try:
             if os.path.isdir(fdir):
@@ -3807,8 +3965,21 @@ def list_overlay_fonts() -> list[str]:
                         fonts.append(fname)
         except Exception:
             continue
-    _FONT_CACHE = fonts
+    _FONT_CACHE[cache_key] = fonts
     return fonts
+
+
+def _config_name_from_yaml_filename(filename: str | None) -> str | None:
+    text = str(filename or "").strip()
+    if not text:
+        return None
+    base = Path(text).name
+    lowered = base.lower()
+    if lowered.endswith("_config.yml"):
+        return base[:-11]
+    if lowered.endswith("_config.yaml"):
+        return base[:-12]
+    return None
 
 
 # Initialize logging
@@ -4165,7 +4336,10 @@ def upload_fonts():
     if not files:
         return jsonify({"status": "error", "message": "No fonts uploaded"}), 400
 
-    os.makedirs(CUSTOM_FONTS_FOLDER, exist_ok=True)
+    config_name = (request.form.get("config_name") or session.get("config_name") or "").strip()
+    fonts_dir = helpers.get_custom_fonts_dir(config_name or None)
+
+    os.makedirs(fonts_dir, exist_ok=True)
     saved = []
     errors = []
 
@@ -4177,13 +4351,13 @@ def upload_fonts():
         if ext not in helpers.FONT_EXTENSIONS:
             errors.append(f"Invalid font type: {filename}")
             continue
-        save_path = os.path.join(CUSTOM_FONTS_FOLDER, filename)
+        save_path = os.path.join(str(fonts_dir), filename)
         font_file.save(save_path)
         saved.append(filename)
 
     if saved:
         global _FONT_CACHE
-        _FONT_CACHE = []
+        _FONT_CACHE = {}
 
     if not saved:
         return jsonify({"status": "error", "message": "No valid fonts uploaded.", "errors": errors}), 400
@@ -4207,7 +4381,8 @@ def custom_fonts(filename):
     if not safe_name.lower().endswith((".ttf", ".otf")):
         abort(404)
 
-    for fdir in helpers.get_font_dirs(include_static=True, include_custom=True):
+    current_config = session.get("config_name") if has_request_context() else None
+    for fdir in helpers.get_font_dirs(include_static=True, include_custom=True, config_name=current_config):
         candidate = os.path.join(str(fdir), safe_name)
         if os.path.exists(candidate):
             return send_from_directory(str(fdir), safe_name)
@@ -5529,9 +5704,7 @@ def import_config_preview():
     if file_name.endswith(".zip"):
         try:
             with zipfile.ZipFile(BytesIO(raw_text)) as archive:
-                bundled_library_files = [
-                    n for n in archive.namelist() if str(n).replace("\\", "/").lstrip("/").startswith(("metadata_files/", "collection_files/", "overlay_files/"))
-                ]
+                bundled_library_files = [n for n in archive.namelist() if _is_bundled_library_archive_member(n)]
                 config_files = [n for n in archive.namelist() if n.lower().endswith((".yml", ".yaml")) and n not in bundled_library_files]
                 if not config_files:
                     return jsonify(success=False, message="No YAML config found in zip file."), 400
@@ -6663,10 +6836,11 @@ def import_config_confirm():
     fonts_skipped_existing = []
     fonts_skipped_failed = []
     if fonts_dir and fonts:
-        os.makedirs(CUSTOM_FONTS_FOLDER, exist_ok=True)
+        config_fonts_dir = helpers.get_custom_fonts_dir(config_name)
+        os.makedirs(config_fonts_dir, exist_ok=True)
         for font_name in fonts:
             src_path = os.path.join(fonts_dir, font_name)
-            dest_path = os.path.join(CUSTOM_FONTS_FOLDER, font_name)
+            dest_path = os.path.join(str(config_fonts_dir), font_name)
             if os.path.exists(dest_path):
                 fonts_skipped.append(font_name)
                 fonts_skipped_existing.append(font_name)
@@ -6679,7 +6853,7 @@ def import_config_confirm():
                 fonts_skipped_failed.append(font_name)
         if fonts_copied:
             global _FONT_CACHE
-            _FONT_CACHE = []
+            _FONT_CACHE = {}
 
     try:
         os.remove(cache_path)
@@ -8008,6 +8182,7 @@ def copy_library_settings():
 
         merged = libraries_data.copy()
         targets_to_process = [source_prefix] + [tid for tid in filtered_targets if tid != source_prefix]
+        config_name = session.get("config_name") or source_payload.get("config_name") or namesgenerator.get_random_name()
 
         for target_id in targets_to_process:
             target_name = name_map.get(target_id, "")
@@ -8025,6 +8200,13 @@ def copy_library_settings():
                 new_value = value
                 if key.endswith("-library"):
                     new_value = target_name or value
+                elif target_id != source_prefix:
+                    if key.endswith("-metadata_files"):
+                        new_value = _clone_library_file_entries_for_target("metadata_files", value, config_name, target_id)
+                    elif key.endswith("-collection_files"):
+                        new_value = _clone_library_file_entries_for_target("collection_files", value, config_name, target_id)
+                    elif key.endswith("-overlay_files"):
+                        new_value = _clone_library_file_entries_for_target("overlay_files", value, config_name, target_id)
                 merged[new_key] = new_value
 
         # Update the aggregated libraries list to include all configured library names
@@ -8035,7 +8217,6 @@ def copy_library_settings():
         merged["libraries"] = ",".join(sorted(set(configured_names)))
 
         # Persist directly to the DB to avoid any loss of data during merge
-        config_name = session.get("config_name") or namesgenerator.get_random_name()
         database.save_section_data(
             name=config_name,
             section="libraries",
@@ -8066,12 +8247,24 @@ def _safe_bundle_name(raw_name: str | None) -> str:
     return safe or "default"
 
 
-def _get_custom_font_files() -> list[Path]:
-    custom_dir = helpers.get_custom_fonts_dir()
-    if not custom_dir.is_dir():
-        return []
-    fonts = [entry for entry in custom_dir.iterdir() if entry.is_file() and entry.suffix.lower() in helpers.FONT_EXTENSIONS]
-    return sorted(fonts, key=lambda p: p.name.lower())
+def _get_custom_font_files(config_name: str | None = None) -> list[Path]:
+    font_files: list[Path] = []
+    seen: set[str] = set()
+    candidate_dirs: list[Path] = []
+    if config_name:
+        candidate_dirs.append(helpers.get_custom_fonts_dir(config_name))
+    candidate_dirs.append(helpers.get_legacy_custom_fonts_dir())
+    for custom_dir in candidate_dirs:
+        if not custom_dir.is_dir():
+            continue
+        for entry in sorted(custom_dir.iterdir(), key=lambda p: p.name.lower()):
+            if not entry.is_file() or entry.suffix.lower() not in helpers.FONT_EXTENSIONS:
+                continue
+            if entry.name in seen:
+                continue
+            font_files.append(entry)
+            seen.add(entry.name)
+    return font_files
 
 
 def _bundle_artifacts_from_yaml(yaml_text):
@@ -8101,19 +8294,19 @@ def _build_config_bundle(
         f"- {config_filename}",
     ]
     if font_names:
-        readme_lines.append("- fonts/ (custom fonts uploaded in Quickstart)")
+        readme_lines.append(f"- {name}/fonts/ (custom fonts uploaded in Quickstart)")
         readme_lines.append(f"- Fonts included: {', '.join(font_names)}")
     if has_artifacts:
-        readme_lines.append("- metadata_files/ collection_files/ overlay_files/ (managed library files)")
+        readme_lines.append(f"- {name}/metadata_files/, {name}/collection_files/, {name}/overlay_files/ (managed library files)")
     readme_lines += [
         "",
         "Install steps:",
         "1) Copy the config file into your Kometa config folder (config/).",
     ]
     if font_names:
-        readme_lines.append("2) Copy the font files from fonts/ into your Kometa config/fonts/ folder.")
+        readme_lines.append(f"2) Copy the font files from {name}/fonts/ into your Kometa config/fonts/ folder.")
     if has_artifacts:
-        readme_lines.append("3) Copy metadata_files/, collection_files/, and overlay_files/ into your Kometa config/ folder.")
+        readme_lines.append(f"3) Copy {name}/ into your Kometa config/ folder.")
     readme_lines += [
         "",
         "Note: The Quickstart Run Now button syncs fonts automatically.",
@@ -8130,7 +8323,7 @@ def _build_config_bundle(
     with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(config_filename, config_text)
         for font_path in font_files:
-            zf.write(font_path, f"fonts/{font_path.name}")
+            zf.write(font_path, f"{name}/fonts/{font_path.name}")
         for artifact in artifact_files:
             _bundle_write_artifact(zf, artifact, redacted=redacted)
         zf.writestr("README.txt", "\n".join(readme_lines))
@@ -8142,9 +8335,9 @@ def _build_config_bundle(
 def download():
     yaml_content = session.get("yaml_content", "")
     if yaml_content:
-        custom_fonts = _get_custom_font_files()
-        artifact_files = _bundle_artifacts_from_yaml(yaml_content)
         config_name = session.get("config_name")
+        custom_fonts = _get_custom_font_files(config_name)
+        artifact_files = _bundle_artifacts_from_yaml(yaml_content)
         if custom_fonts or artifact_files:
             bundle = _build_config_bundle(
                 yaml_content,
@@ -8179,9 +8372,9 @@ def download_redacted():
         redacted_content = helpers.redact_sensitive_data(yaml_content)
 
         # Serve the redacted YAML as a file download
-        custom_fonts = _get_custom_font_files()
-        artifact_files = _bundle_artifacts_from_yaml(yaml_content)
         config_name = session.get("config_name")
+        custom_fonts = _get_custom_font_files(config_name)
+        artifact_files = _bundle_artifacts_from_yaml(yaml_content)
         if custom_fonts or artifact_files:
             bundle = _build_config_bundle(
                 redacted_content,
@@ -14856,7 +15049,9 @@ def validate_kometa_root():
             parsed_config = yaml_parser.load(f) or {}
         font_refs = helpers.collect_font_references(parsed_config)
         if font_refs:
-            font_result = helpers.copy_fonts_to_kometa(font_refs, kometa_root=p)
+            active_config_name = session.get("config_name") if has_request_context() else None
+            config_font_scope = active_config_name or _config_name_from_yaml_filename(config_name)
+            font_result = helpers.copy_fonts_to_kometa(font_refs, kometa_root=p, config_name=config_font_scope)
             copied = font_result.get("copied", [])
             missing = font_result.get("missing", [])
             errors = font_result.get("errors", [])
