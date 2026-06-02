@@ -801,6 +801,27 @@ def _yaml_path_suffix(path_value):
     return str(path_value or "").strip().lower().endswith((".yml", ".yaml"))
 
 
+def _normalize_bundle_member_name(path_value):
+    normalized = str(path_value or "").replace("\\", "/").lstrip("/")
+    return "/".join(part for part in normalized.split("/") if part)
+
+
+def _is_allowed_bundle_member(path_value):
+    normalized = _normalize_bundle_member_name(path_value)
+    if not normalized:
+        return True
+    lowered = normalized.lower()
+    if _is_bundled_library_archive_member(normalized):
+        return _yaml_path_suffix(normalized)
+    if _yaml_path_suffix(normalized):
+        return True
+    if lowered.endswith((".ttf", ".otf")):
+        return True
+    if lowered == "readme.txt":
+        return True
+    return False
+
+
 def _dump_yaml_text(data):
     buffer = io.StringIO()
     YAML().dump(data, buffer)
@@ -3950,7 +3971,12 @@ def _resolve_preview_base_image_path(img_type: str, selected_image: str) -> str:
 
 # Font discovery (TTF/OTF) across common static dirs
 def list_overlay_fonts() -> list[str]:
+    global _FONT_CACHE
     config_name = session.get("config_name") if has_request_context() else None
+    if config_name:
+        migration = helpers.migrate_legacy_custom_fonts_to_config(config_name)
+        if migration.get("copied"):
+            _FONT_CACHE = {}
     cache_key = helpers.normalize_config_name_for_storage(config_name) if config_name else "__default__"
     cached = _FONT_CACHE.get(cache_key)
     if cached:
@@ -5704,8 +5730,31 @@ def import_config_preview():
     if file_name.endswith(".zip"):
         try:
             with zipfile.ZipFile(BytesIO(raw_text)) as archive:
-                bundled_library_files = [n for n in archive.namelist() if _is_bundled_library_archive_member(n)]
-                config_files = [n for n in archive.namelist() if n.lower().endswith((".yml", ".yaml")) and n not in bundled_library_files]
+                archive_members = archive.namelist()
+                unexpected_members = []
+                bundled_library_files = []
+                config_files = []
+                font_files = []
+
+                for member_name in archive_members:
+                    normalized_member = _normalize_bundle_member_name(member_name)
+                    if not normalized_member:
+                        continue
+                    if not _is_allowed_bundle_member(normalized_member):
+                        unexpected_members.append(normalized_member)
+                        continue
+                    if _is_bundled_library_archive_member(normalized_member):
+                        bundled_library_files.append(member_name)
+                    elif _yaml_path_suffix(normalized_member):
+                        config_files.append(member_name)
+                    elif normalized_member.lower().endswith((".ttf", ".otf")):
+                        font_files.append(member_name)
+
+                if unexpected_members:
+                    preview = ", ".join(unexpected_members[:5])
+                    if len(unexpected_members) > 5:
+                        preview += ", ..."
+                    return jsonify(success=False, message=f"Zip file contains unsupported entries: {preview}"), 400
                 if not config_files:
                     return jsonify(success=False, message="No YAML config found in zip file."), 400
                 if len(config_files) > 1:
@@ -5717,7 +5766,6 @@ def import_config_preview():
                 except Exception:
                     return jsonify(success=False, message="Unable to read config from zip."), 400
 
-                font_files = [n for n in archive.namelist() if n.lower().endswith((".ttf", ".otf"))]
                 if font_files or bundled_library_files:
                     cache_dir = Path(helpers.CONFIG_DIR) / "import_cache"
                     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -8252,6 +8300,7 @@ def _get_custom_font_files(config_name: str | None = None) -> list[Path]:
     seen: set[str] = set()
     candidate_dirs: list[Path] = []
     if config_name:
+        helpers.migrate_legacy_custom_fonts_to_config(config_name)
         candidate_dirs.append(helpers.get_custom_fonts_dir(config_name))
     candidate_dirs.append(helpers.get_legacy_custom_fonts_dir())
     for custom_dir in candidate_dirs:
@@ -8297,7 +8346,7 @@ def _build_config_bundle(
         readme_lines.append(f"- {name}/fonts/ (custom fonts uploaded in Quickstart)")
         readme_lines.append(f"- Fonts included: {', '.join(font_names)}")
     if has_artifacts:
-        readme_lines.append(f"- {name}/metadata_files/, {name}/collection_files/, {name}/overlay_files/ (managed library files)")
+        readme_lines.append(f"- {name}/metadata_files/, {name}/collection_files/, {name}/overlay_files/ (config-owned library files)")
     readme_lines += [
         "",
         "Install steps:",
@@ -8309,7 +8358,8 @@ def _build_config_bundle(
         readme_lines.append(f"3) Copy {name}/ into your Kometa config/ folder.")
     readme_lines += [
         "",
-        "Note: The Quickstart Run Now button syncs fonts automatically.",
+        "Note: Validate Kometa and Run Now both sync config-owned library files automatically.",
+        "Note: The Quickstart Run Now button also syncs referenced fonts automatically.",
         "This bundle is for manual installs.",
     ]
     if redacted:
@@ -15047,11 +15097,11 @@ def validate_kometa_root():
         yaml_parser = YAML(typ="safe")
         with src_yaml.open("r", encoding="utf-8") as f:
             parsed_config = yaml_parser.load(f) or {}
+        active_config_name = session.get("config_name") if has_request_context() else None
+        config_scope = active_config_name or _config_name_from_yaml_filename(config_name)
         font_refs = helpers.collect_font_references(parsed_config)
         if font_refs:
-            active_config_name = session.get("config_name") if has_request_context() else None
-            config_font_scope = active_config_name or _config_name_from_yaml_filename(config_name)
-            font_result = helpers.copy_fonts_to_kometa(font_refs, kometa_root=p, config_name=config_font_scope)
+            font_result = helpers.copy_fonts_to_kometa(font_refs, kometa_root=p, config_name=config_scope)
             copied = font_result.get("copied", [])
             missing = font_result.get("missing", [])
             errors = font_result.get("errors", [])
@@ -15061,8 +15111,19 @@ def validate_kometa_root():
                 log(f"⚠️ Fonts referenced in the config not found: {', '.join(missing)}")
             for err in errors:
                 log(f"⚠️ {err}")
+        if config_scope:
+            artifact_result = helpers.sync_managed_library_artifacts_to_kometa(config_scope, kometa_root=p)
+            synced = artifact_result.get("synced", [])
+            removed = artifact_result.get("removed", [])
+            errors = artifact_result.get("errors", [])
+            if synced:
+                log(f"✅ Synced {len(synced)} managed library artifact tree(s) to Kometa config/{config_scope}.")
+            if removed:
+                log(f"ℹ️ Removed {len(removed)} stale managed library artifact tree(s) from Kometa config/{config_scope}.")
+            for err in errors:
+                log(f"⚠️ {err}")
     except Exception as e:
-        log(f"⚠️ Failed to sync fonts referenced in the config: {e}")
+        log(f"⚠️ Failed to sync config-owned assets referenced in the config: {e}")
 
     log("✅ Kometa root is valid and ready.")
 
