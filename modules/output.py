@@ -952,7 +952,13 @@ def _collapse_collection_data_template_vars(config_data):
     if not isinstance(config_data, dict):
         return config_data
     libraries_section = config_data.get("libraries", {})
-    libraries = libraries_section.get("libraries")
+    libraries = None
+    if isinstance(libraries_section, dict):
+        nested = libraries_section.get("libraries")
+        if isinstance(nested, dict):
+            libraries = nested
+        else:
+            libraries = libraries_section
     if not isinstance(libraries, dict):
         return config_data
     for library_data in libraries.values():
@@ -1463,13 +1469,16 @@ def build_libraries_section(
                         if new_key not in template_vars:
                             template_vars[new_key] = template_vars[old_key]
                         template_vars.pop(old_key, None)
-                    if "exclude" in template_vars:
-                        exclude_values = _parse_string_list(template_vars.get("exclude"))
-                        if exclude_values:
-                            template_vars["exclude"] = exclude_values
+                    for list_key in ("exclude", "exclude_prefix"):
+                        if list_key not in template_vars:
+                            continue
+                        list_values = _parse_string_list(template_vars.get(list_key))
+                        if list_values:
+                            template_vars[list_key] = list_values
                         else:
-                            template_vars.pop("exclude", None)
-                    file_entry["template_variables"] = template_vars
+                            template_vars.pop(list_key, None)
+                    if template_vars:
+                        file_entry["template_variables"] = template_vars
 
                 collection_files.append(file_entry)
 
@@ -2280,9 +2289,10 @@ def reorder_library_section(library_data):
     - `schedule` comes next.
     - `remove_overlays`, `reset_overlays`, and `schedule_overlays` come after that.
     - `template_variables` next.
+    - `settings` appears before `radarr` / `sonarr` / `operations`.
+    - `metadata_files` appears after library settings and operations.
     - `metadata_files` appears before `collection_files`.
     - `collection_files` appears before `overlay_files`.
-    - `settings` appears before `radarr` / `sonarr` / `operations`.
     - Keys inside `operations` are ordered as per Kometa Wiki.
     - Other keys retain their natural order.
     """
@@ -2307,14 +2317,6 @@ def reorder_library_section(library_data):
     # 4. Then template_variables
     if "template_variables" in library_data:
         reordered_data["template_variables"] = library_data["template_variables"]
-
-    # 5. Then library-level metadata/collections/overlays in explicit YAML order
-    if "metadata_files" in library_data:
-        reordered_data["metadata_files"] = library_data["metadata_files"]
-    if "collection_files" in library_data:
-        reordered_data["collection_files"] = library_data["collection_files"]
-    if "overlay_files" in library_data:
-        reordered_data["overlay_files"] = library_data["overlay_files"]
 
     # 5. Then library settings
     if "settings" in library_data:
@@ -2371,7 +2373,15 @@ def reorder_library_section(library_data):
                 ordered_ops[k] = v
         reordered_data["operations"] = ordered_ops
 
-    # 7. Finally add any other keys that weren't handled
+    # 8. Then library-level metadata/collections/overlays in explicit YAML order
+    if "metadata_files" in library_data:
+        reordered_data["metadata_files"] = library_data["metadata_files"]
+    if "collection_files" in library_data:
+        reordered_data["collection_files"] = library_data["collection_files"]
+    if "overlay_files" in library_data:
+        reordered_data["overlay_files"] = library_data["overlay_files"]
+
+    # 9. Finally add any other keys that weren't handled
     for key, value in library_data.items():
         if key not in reordered_data:
             reordered_data[key] = value
@@ -2564,7 +2574,7 @@ def build_config(header_style="standard", config_name=None):
                 if prefix == "attribute_":
                     return "-attribute_" in key
                 if prefix == "template_variables":
-                    return "-template_variables" in key
+                    return "-template_variables" in key or "-attribute_template_variables" in key
                 if prefix == "top_level_":
                     return "-top_level_" in key
                 if prefix in {"collection_files", "overlay_files", "metadata_files"}:

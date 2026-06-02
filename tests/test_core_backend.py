@@ -1,3 +1,6 @@
+import pytest
+
+
 def _contains_dummy_field(value, expected):
     if isinstance(value, dict):
         for key, item in value.items():
@@ -1036,6 +1039,128 @@ def test_build_config_includes_saved_library_metadata_files(app, isolated_config
     assert "movies_refresh.yml" in yaml_content
 
 
+def test_collapse_collection_data_template_vars_handles_direct_libraries_dict():
+    from modules import output
+
+    config_data = {
+        "libraries": {
+            "Movies": {
+                "collection_files": [
+                    {
+                        "default": "oscars",
+                        "template_variables": {
+                            "data_starting": "first",
+                        },
+                    },
+                    {
+                        "default": "year",
+                        "template_variables": {
+                            "data_starting": "1880",
+                            "data_ending": "current_year",
+                        },
+                    },
+                ]
+            }
+        }
+    }
+
+    collapsed = output._collapse_collection_data_template_vars(config_data)
+    entries = collapsed["libraries"]["Movies"]["collection_files"]
+
+    assert entries[0]["template_variables"] == {"data": {"starting": "first"}}
+    assert entries[1]["template_variables"] == {"data": {"starting": 1880, "ending": "current_year"}}
+
+
+def test_collapse_collection_data_template_vars_handles_actor_style_data_blocks():
+    from modules import output
+
+    config_data = {
+        "libraries": {
+            "Movies": {
+                "collection_files": [
+                    {
+                        "default": "actor",
+                        "template_variables": {
+                            "collection_section": "001",
+                            "style": "signature",
+                            "data_depth": 1,
+                            "data_limit": 15,
+                            "sort_by": "audience_rating.desc",
+                        },
+                    },
+                    {
+                        "default": "director",
+                        "template_variables": {
+                            "style": "signature",
+                            "data_depth": 1,
+                            "data_limit": 15,
+                        },
+                    },
+                ]
+            }
+        }
+    }
+
+    collapsed = output._collapse_collection_data_template_vars(config_data)
+    actor_tv = collapsed["libraries"]["Movies"]["collection_files"][0]["template_variables"]
+    director_tv = collapsed["libraries"]["Movies"]["collection_files"][1]["template_variables"]
+
+    assert actor_tv == {
+        "collection_section": "001",
+        "style": "signature",
+        "sort_by": "audience_rating.desc",
+        "data": {"depth": 1, "limit": 15},
+    }
+    assert director_tv == {
+        "style": "signature",
+        "data": {"depth": 1, "limit": 15},
+    }
+
+
+def test_collapse_collection_data_template_vars_removes_flat_data_keys_from_all_collection_entries():
+    from modules import output
+
+    config_data = {
+        "libraries": {
+            "Movies": {
+                "collection_files": [
+                    {
+                        "default": "oscars",
+                        "template_variables": {
+                            "data_starting": "first",
+                        },
+                    },
+                    {
+                        "default": "actor",
+                        "template_variables": {
+                            "style": "signature",
+                            "data_depth": 1,
+                            "data_limit": 15,
+                        },
+                    },
+                    {
+                        "default": "year",
+                        "template_variables": {
+                            "data_starting": "1880",
+                            "data_ending": "current_year",
+                        },
+                    },
+                ]
+            }
+        }
+    }
+
+    collapsed = output._collapse_collection_data_template_vars(config_data)
+    entries = collapsed["libraries"]["Movies"]["collection_files"]
+
+    for entry in entries:
+        template_variables = entry.get("template_variables", {})
+        flat_data_keys = [key for key in template_variables.keys() if isinstance(key, str) and key.startswith("data_")]
+        assert flat_data_keys == []
+        if "data" in template_variables:
+            assert isinstance(template_variables["data"], dict)
+
+
 def test_build_config_prunes_default_horizontal_ratings_offsets(app, monkeypatch):
     from flask import session
     from modules import output
@@ -2018,6 +2143,59 @@ def test_final_page_stale_bulk_gate_skips_config_generation(client, isolated_con
     assert b'data-auto-validate="true"' in resp.data
 
 
+def test_final_page_preserves_annotated_yaml_content(client, isolated_config_dir, monkeypatch, qs_module):
+    annotated_yaml = (
+        "# yaml-language-server: $schema=https://example.invalid/config-schema.json\n\n" "#==================== KOMETA ====================#\n\n" "plex:\n" "  token: secret\n"
+    )
+    captured = {}
+
+    monkeypatch.setattr(
+        qs_module,
+        "_build_final_gate",
+        lambda *_args, **_kwargs: {
+            "stage": "kometa",
+            "todo_count": 0,
+            "todo_blockers": [],
+            "bulk_validation_fresh": True,
+            "bulk_validation_at": qs_module.utc_now_iso(),
+            "validation_ttl_hours": 12,
+            "can_build_config": True,
+            "config_valid": False,
+        },
+    )
+    monkeypatch.setattr(
+        qs_module.output,
+        "build_config",
+        lambda *_args, **_kwargs: (True, "", {"plex": {"token": "secret"}}, annotated_yaml, []),
+    )
+    monkeypatch.setattr(
+        qs_module,
+        "_normalize_generated_config_library_files",
+        lambda config_data, _config_name: (config_data, False, []),
+    )
+
+    def fake_save_to_named_config(yaml_text, config_name, used_fonts):
+        captured["yaml_text"] = yaml_text
+        captured["config_name"] = config_name
+        captured["used_fonts"] = used_fonts
+        return f"{config_name}.yml"
+
+    monkeypatch.setattr(qs_module.helpers, "save_to_named_config", fake_save_to_named_config)
+
+    with client.session_transaction() as sess:
+        sess["config_name"] = "pytest_final_annotated_yaml"
+
+    resp = client.get("/step/900-kometa")
+    assert resp.status_code == 200
+    assert b"yaml-language-server" in resp.data
+
+    with client.session_transaction() as sess:
+        assert sess.get("yaml_content") == annotated_yaml
+
+    assert captured["yaml_text"] == annotated_yaml
+    assert captured["config_name"] == "pytest_final_annotated_yaml"
+
+
 def test_switch_config_returns_new_workspace_status(client, isolated_config_dir, app, qs_module):
     from modules import database
 
@@ -2171,6 +2349,21 @@ def test_orphaned_config_artifacts_route_lists_disk_only_bundles(client, isolate
     assert any("metadata_files" in path for path in orphan["paths"])
 
 
+def test_orphaned_config_artifacts_route_lists_font_only_default_bundle(client, isolated_config_dir):
+    default_font_dir = isolated_config_dir / "default" / "fonts"
+    default_font_dir.mkdir(parents=True, exist_ok=True)
+    (default_font_dir / "Poster.ttf").write_bytes(b"default-font")
+
+    resp = client.get("/orphaned-config-artifacts")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["success"] is True
+
+    orphan = next((item for item in payload["orphans"] if item["name"] == "default"), None)
+    assert orphan is not None
+    assert any(path.endswith("\\default") or path.endswith("/default") for path in orphan["paths"])
+
+
 def test_delete_orphaned_config_artifacts_route_removes_selected_bundle(client, isolated_config_dir, app):
     from pathlib import Path
 
@@ -2196,6 +2389,19 @@ def test_delete_orphaned_config_artifacts_route_removes_selected_bundle(client, 
     assert not archive_dir.exists()
     assert not (isolated_config_dir / orphan_name / "collection_files").exists()
     assert not (kometa_path / f"{orphan_name}_config.yml").exists()
+
+
+def test_delete_orphaned_config_artifacts_route_removes_font_only_default_bundle(client, isolated_config_dir):
+    default_font_dir = isolated_config_dir / "default" / "fonts"
+    default_font_dir.mkdir(parents=True, exist_ok=True)
+    (default_font_dir / "Poster.ttf").write_bytes(b"default-font")
+
+    resp = client.post("/orphaned-config-artifacts/delete", json={"names": ["default"]})
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["success"] is True
+    assert payload["deleted"] == ["default"]
+    assert not (isolated_config_dir / "default").exists()
 
 
 def test_delete_orphaned_config_artifacts_route_removes_copy_named_yaml(client, isolated_config_dir):
@@ -2622,6 +2828,24 @@ def test_save_to_named_config_syncs_managed_library_artifacts_to_kometa(isolated
     assert synced_file.read_text(encoding="utf-8") == collection_file.read_text(encoding="utf-8")
 
 
+def test_save_to_named_config_rejects_blank_config_name(isolated_config_dir, app):
+    from modules import helpers
+
+    with app.app_context():
+        with pytest.raises(ValueError, match="requires an explicit config name"):
+            helpers.save_to_named_config("settings:\n  cache: true\n", "   ")
+
+    assert not (isolated_config_dir / "default_config.yml").exists()
+    assert not (isolated_config_dir / "default").exists()
+
+
+def test_sync_managed_library_artifacts_to_kometa_rejects_blank_config_name(isolated_config_dir, app):
+    from modules import helpers
+
+    with pytest.raises(ValueError, match="requires an explicit config name"):
+        helpers.sync_managed_library_artifacts_to_kometa("   ", kometa_root=app.config["KOMETA_ROOT"])
+
+
 def test_import_config_confirm_rehomes_bundled_library_files(client, isolated_config_dir, monkeypatch, qs_module):
     import io
     import json
@@ -2770,6 +2994,108 @@ def test_build_libraries_section_keeps_default_ratings_overlay_when_overlay_file
     assert ratings_entry is not None
     assert ratings_entry["template_variables"]["rating1"] == "critic"
     assert ratings_entry["template_variables"]["rating1_image"] == "imdb"
+
+
+def test_build_libraries_section_includes_separator_placeholder_imdb_id(app):
+    from modules import output
+
+    libraries_section = output.build_libraries_section(
+        {"mov-library_movies-library": "Movies"},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {
+            "movies": {
+                "mov-library_movies-template_variables[use_separator]": "gray",
+                "mov-library_movies-attribute_template_variables[placeholder_imdb_id]": "tt0108052",
+                "mov-library_movies-template_variables[language]": "en",
+                "mov-library_movies-template_variables[collection_mode]": "hide",
+            }
+        },
+        {},
+        {},
+        {},
+    )
+
+    template_variables = libraries_section["libraries"]["Movies"]["template_variables"]
+    assert template_variables["sep_style"] == "gray"
+    assert template_variables["placeholder_imdb_id"] == "tt0108052"
+    assert template_variables["language"] == "en"
+    assert template_variables["collection_mode"] == "hide"
+
+
+def test_reorder_library_section_keeps_settings_and_operations_before_library_files():
+    from modules import output
+
+    reordered = output.reorder_library_section(
+        {
+            "report_path": "config/Movies_Report.yml",
+            "schedule": "weekly(mon)",
+            "schedule_overlays": "weekly(wed)",
+            "template_variables": {"sep_style": "gray"},
+            "metadata_files": [{"folder": "config/example/metadata"}],
+            "collection_files": [{"folder": "config/example/collections"}],
+            "overlay_files": [{"folder": "config/example/overlays"}],
+            "settings": {"asset_directory": ["C:\\Assets\\Movies"]},
+            "radarr": {"url": "http://radarr.local"},
+            "operations": {"assets_for_all": True},
+        }
+    )
+
+    assert list(reordered.keys()) == [
+        "report_path",
+        "schedule",
+        "schedule_overlays",
+        "template_variables",
+        "settings",
+        "radarr",
+        "operations",
+        "metadata_files",
+        "collection_files",
+        "overlay_files",
+    ]
+
+
+def test_build_libraries_section_omits_empty_collectionless_exclude_prefix(app):
+    from modules import output
+
+    libraries_section = output.build_libraries_section(
+        {"mov-library_movies-library": "Movies"},
+        {},
+        {
+            "movies": {
+                "mov-library_movies-collection_collectionless": True,
+                "mov-library_movies-template_collection_collectionless_exclude_prefix": "[]",
+            }
+        },
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+    )
+
+    collection_entries = libraries_section["libraries"]["Movies"]["collection_files"]
+    collectionless_entry = next((entry for entry in collection_entries if entry.get("default") == "collectionless"), None)
+
+    assert collectionless_entry is not None
+    assert "template_variables" not in collectionless_entry
 
 
 def test_build_libraries_section_emits_schedule(app):
