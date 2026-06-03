@@ -795,11 +795,13 @@ def test_clean_form_data_preserves_overlay_language_multiselect_values():
 
     from modules import persistence
 
-    payload = MultiDict([
-        ("mov-library_movies-movie-template_overlay_languages[languages]", "en"),
-        ("mov-library_movies-movie-template_overlay_languages[languages]", "ja"),
-        ("mov-library_movies-movie-template_overlay_languages[style]", "square"),
-    ])
+    payload = MultiDict(
+        [
+            ("mov-library_movies-movie-template_overlay_languages[languages]", "en"),
+            ("mov-library_movies-movie-template_overlay_languages[languages]", "ja"),
+            ("mov-library_movies-movie-template_overlay_languages[style]", "square"),
+        ]
+    )
 
     cleaned = persistence.clean_form_data(payload)
 
@@ -1172,10 +1174,7 @@ def test_collapse_collection_data_template_vars_removes_flat_data_keys_from_all_
 
     for entry in entries:
         template_variables = entry.get("template_variables", {})
-        flat_data_keys = [
-            key for key in template_variables.keys()
-            if isinstance(key, str) and key.startswith("data_")
-        ]
+        flat_data_keys = [key for key in template_variables.keys() if isinstance(key, str) and key.startswith("data_")]
         assert flat_data_keys == []
         if "data" in template_variables:
             assert isinstance(template_variables["data"], dict)
@@ -2165,10 +2164,7 @@ def test_final_page_stale_bulk_gate_skips_config_generation(client, isolated_con
 
 def test_final_page_preserves_annotated_yaml_content(client, isolated_config_dir, monkeypatch, qs_module):
     annotated_yaml = (
-        "# yaml-language-server: $schema=https://example.invalid/config-schema.json\n\n"
-        "#==================== KOMETA ====================#\n\n"
-        "plex:\n"
-        "  token: secret\n"
+        "# yaml-language-server: $schema=https://example.invalid/config-schema.json\n\n" "#==================== KOMETA ====================#\n\n" "plex:\n" "  token: secret\n"
     )
     captured = {}
 
@@ -3087,16 +3083,82 @@ def test_build_libraries_section_emits_subtitle_languages_overlay_language_list(
 
     overlay_entries = libraries_section["libraries"]["Movies"]["overlay_files"]
     subtitle_entry = next(
-        (
-            entry for entry in overlay_entries
-            if entry.get("default") == "languages"
-            and entry.get("template_variables", {}).get("use_subtitles") is True
-        ),
+        (entry for entry in overlay_entries if entry.get("default") == "languages" and entry.get("template_variables", {}).get("use_subtitles") is True),
         None,
     )
     assert subtitle_entry is not None
     assert subtitle_entry["template_variables"]["languages"] == ["en", "ja"]
     assert subtitle_entry["template_variables"]["style"] == "square"
+
+
+def test_build_libraries_section_emits_only_non_default_language_weight_overrides(app):
+    from modules import output
+
+    with app.app_context():
+        libraries_section = output.build_libraries_section(
+            {"mov-library_movies-library": "Movies"},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+                "movies": {
+                    "mov-library_movies-movie-overlay_languages": True,
+                    "mov-library_movies-movie-template_overlay_languages[weight_en]": "610",
+                    "mov-library_movies-movie-template_overlay_languages[weight_ja]": "700",
+                }
+            },
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+        )
+
+    overlay_entries = libraries_section["libraries"]["Movies"]["overlay_files"]
+    languages_entry = next((entry for entry in overlay_entries if entry.get("default") == "languages"), None)
+    assert languages_entry is not None
+    template_variables = languages_entry.get("template_variables", {})
+    assert "weight_en" not in template_variables
+    assert template_variables["weight_ja"] == 700
+
+
+def test_prepare_import_payload_accepts_language_weight_override():
+    from modules import importer
+
+    config_data = {
+        "libraries": {
+            "Movies": {
+                "overlay_files": [
+                    {
+                        "default": "languages",
+                        "template_variables": {
+                            "languages": ["en", "ja"],
+                            "weight_ja": 700,
+                            "use_subtitles": True,
+                        },
+                    }
+                ]
+            }
+        }
+    }
+
+    payload, report = importer.prepare_import_payload(
+        config_data,
+        plex_movie_names={"Movies"},
+        plex_show_names=set(),
+    )
+
+    libraries_payload = payload["libraries"]["libraries"]
+    assert libraries_payload["mov-library_movies-movie-overlay_languages_subtitles"] is True
+    assert libraries_payload["mov-library_movies-movie-template_overlay_languages_subtitles[languages]"] == ["en", "ja"]
+    assert libraries_payload["mov-library_movies-movie-template_overlay_languages_subtitles[weight_ja]"] == 700
+    assert report.summary()["imported"] > 0
 
 
 def test_build_libraries_section_includes_separator_placeholder_imdb_id(app):
