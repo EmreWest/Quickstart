@@ -198,6 +198,226 @@ document.addEventListener('DOMContentLoaded', function () {
     })
   }
 
+  const kometaInstallSettings = document.getElementById('start-kometa-install-settings')
+  const kometaInstallSaveButton = document.getElementById('start-kometa-install-save')
+  const kometaInstallStatus = document.getElementById('start-kometa-install-status')
+  const kometaInstallMessage = document.getElementById('start-kometa-install-message')
+  const kometaExistingRootWrap = document.getElementById('start-kometa-existing-root-wrap')
+  const kometaExistingRootInput = document.getElementById('start-kometa-existing-root')
+  const kometaExternalConfigWrap = document.getElementById('start-kometa-external-config-wrap')
+  const kometaExternalConfigInput = document.getElementById('start-kometa-external-config-root')
+  const kometaExternalLogWrap = document.getElementById('start-kometa-external-log-wrap')
+  const kometaExternalLogInput = document.getElementById('start-kometa-external-log-root')
+  const kometaExternalDrawbacks = document.getElementById('start-kometa-external-drawbacks')
+  const kometaActiveRoot = document.getElementById('start-kometa-active-root')
+  const kometaActiveConfig = document.getElementById('start-kometa-active-config')
+  const kometaActiveLog = document.getElementById('start-kometa-active-log')
+  const kometaModePill = document.getElementById('qs-kometa-mode-pill')
+  const kometaModePillBadge = document.getElementById('qs-kometa-mode-pill-badge')
+
+  function getStartKometaInstallMode () {
+    const selected = document.querySelector('input[name="start-kometa-install-mode"]:checked')
+    return selected ? String(selected.value || '').trim().toLowerCase() : 'managed'
+  }
+
+  function syncStartKometaModePill () {
+    if (!kometaModePillBadge) return
+    const mode = getStartKometaInstallMode()
+    let label = 'Managed'
+    let title = 'Kometa mode: Quickstart-managed install'
+    kometaModePillBadge.classList.remove('text-bg-success', 'text-bg-info', 'text-bg-warning', 'text-dark')
+
+    if (mode === 'existing') {
+      label = 'Existing'
+      title = 'Kometa mode: Existing direct install'
+      kometaModePillBadge.classList.add('text-bg-info', 'text-dark')
+    } else if (mode === 'external') {
+      label = 'External'
+      title = 'Kometa mode: External/containerized config+logs'
+      kometaModePillBadge.classList.add('text-bg-warning', 'text-dark')
+    } else {
+      kometaModePillBadge.classList.add('text-bg-success')
+    }
+
+    kometaModePillBadge.innerHTML = `<i class="bi bi-diagram-3 me-1"></i> Kometa: ${label}`
+    if (kometaModePill) {
+      kometaModePill.setAttribute('title', title)
+    }
+  }
+
+  function syncStartKometaInstallUi () {
+    if (!kometaInstallSettings) return
+    const mode = getStartKometaInstallMode()
+    const isExisting = mode === 'existing'
+    const isExternal = mode === 'external'
+    if (kometaExistingRootWrap) {
+      kometaExistingRootWrap.classList.toggle('d-none', !isExisting)
+    }
+    if (kometaExternalConfigWrap) {
+      kometaExternalConfigWrap.classList.toggle('d-none', !isExternal)
+    }
+    if (kometaExternalLogWrap) {
+      kometaExternalLogWrap.classList.toggle('d-none', !isExternal)
+    }
+    if (kometaExternalDrawbacks) {
+      kometaExternalDrawbacks.classList.toggle('d-none', !isExternal)
+    }
+    if (kometaInstallMessage) {
+      if (isExisting) {
+        kometaInstallMessage.textContent = 'Quickstart will only use the existing direct Kometa install if that root is visible from this environment.'
+      } else if (isExternal) {
+        kometaInstallMessage.textContent = 'Quickstart will sync generated config and optional logs for an external/containerized Kometa, but it will not launch or update that runtime directly.'
+      } else {
+        kometaInstallMessage.textContent = 'Quickstart will create and manage its own Kometa install inside this workspace.'
+      }
+    }
+    syncStartKometaModePill()
+  }
+
+  function normalizeKometaPathInput (value) {
+    return String(value || '').trim()
+  }
+
+  function getPersistedStartKometaInstallChoice () {
+    if (!kometaInstallSettings) {
+      return {
+        mode: 'managed',
+        existingRoot: '',
+        externalConfigRoot: '',
+        externalLogRoot: ''
+      }
+    }
+    return {
+      mode: String(kometaInstallSettings.dataset.installMode || 'managed').trim().toLowerCase() || 'managed',
+      existingRoot: normalizeKometaPathInput(kometaInstallSettings.dataset.existingRoot),
+      externalConfigRoot: normalizeKometaPathInput(kometaInstallSettings.dataset.externalConfigRoot),
+      externalLogRoot: normalizeKometaPathInput(kometaInstallSettings.dataset.externalLogRoot)
+    }
+  }
+
+  function getCurrentStartKometaInstallChoice () {
+    return {
+      mode: getStartKometaInstallMode(),
+      existingRoot: normalizeKometaPathInput(kometaExistingRootInput ? kometaExistingRootInput.value : ''),
+      externalConfigRoot: normalizeKometaPathInput(kometaExternalConfigInput ? kometaExternalConfigInput.value : ''),
+      externalLogRoot: normalizeKometaPathInput(kometaExternalLogInput ? kometaExternalLogInput.value : '')
+    }
+  }
+
+  function isStartKometaInstallChoiceDirty () {
+    const persisted = getPersistedStartKometaInstallChoice()
+    const current = getCurrentStartKometaInstallChoice()
+    if (current.mode !== persisted.mode) return true
+    if (current.mode === 'existing') return current.existingRoot !== persisted.existingRoot
+    if (current.mode === 'external') {
+      return current.externalConfigRoot !== persisted.externalConfigRoot || current.externalLogRoot !== persisted.externalLogRoot
+    }
+    return false
+  }
+
+  function syncStartKometaInstallSaveState (options = {}) {
+    if (!kometaInstallSaveButton) return
+    const forceDisabled = options.forceDisabled === true
+    const hasUnsavedChanges = isStartKometaInstallChoiceDirty()
+    const disabled = forceDisabled || !hasUnsavedChanges
+    kometaInstallSaveButton.disabled = disabled
+    kometaInstallSaveButton.classList.remove('btn-success', 'btn-secondary')
+    kometaInstallSaveButton.classList.add(disabled ? 'btn-secondary' : 'btn-success')
+    if (kometaInstallStatus && !options.preserveStatusText) {
+      kometaInstallStatus.textContent = options.statusText !== undefined
+        ? options.statusText
+        : (hasUnsavedChanges ? 'Unsaved changes.' : 'Saved.')
+    }
+  }
+
+  async function saveStartKometaInstallChoice () {
+    if (!kometaInstallSettings || !kometaInstallSaveButton) return
+    const mode = getStartKometaInstallMode()
+    const existingRoot = kometaExistingRootInput ? kometaExistingRootInput.value.trim() : ''
+    const externalConfigRoot = kometaExternalConfigInput ? kometaExternalConfigInput.value.trim() : ''
+    const externalLogRoot = kometaExternalLogInput ? kometaExternalLogInput.value.trim() : ''
+    const configName = window.pageInfo && window.pageInfo.config_name ? window.pageInfo.config_name : ''
+
+    kometaInstallSaveButton.disabled = true
+    kometaInstallSaveButton.classList.remove('btn-success')
+    kometaInstallSaveButton.classList.add('btn-secondary')
+    if (kometaInstallStatus) kometaInstallStatus.textContent = 'Saving...'
+
+    try {
+      const res = await fetch('/save-kometa-install-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config_name: configName,
+          install_mode: mode,
+          existing_root: existingRoot,
+          external_config_root: externalConfigRoot,
+          external_log_root: externalLogRoot
+        })
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.message || 'Unable to save the Kometa choice.')
+      }
+      kometaInstallSettings.dataset.installMode = data.install_mode || mode
+      kometaInstallSettings.dataset.existingRoot = normalizeKometaPathInput(data.existing_root)
+      kometaInstallSettings.dataset.externalConfigRoot = normalizeKometaPathInput(data.external_config_root)
+      kometaInstallSettings.dataset.externalLogRoot = normalizeKometaPathInput(data.external_log_root)
+      kometaInstallSettings.dataset.selectedRoot = data.kometa_primary_path_display || data.kometa_config_dir_display || data.kometa_root_display || data.kometa_root || ''
+      if (window.pageInfo) {
+        window.pageInfo.kometa_install_mode = data.install_mode || mode
+        window.pageInfo.kometa_existing_root = normalizeKometaPathInput(data.existing_root)
+        window.pageInfo.kometa_external_config_root = normalizeKometaPathInput(data.external_config_root)
+        window.pageInfo.kometa_external_log_root = normalizeKometaPathInput(data.external_log_root)
+      }
+      if (kometaActiveRoot) {
+        kometaActiveRoot.textContent = data.kometa_primary_path_display || data.kometa_config_dir_display || data.kometa_root_display || data.kometa_root || ''
+      }
+      if (kometaActiveConfig) {
+        kometaActiveConfig.textContent = data.kometa_config_dir_display || data.kometa_config_dir || ''
+      }
+      if (kometaActiveLog) {
+        kometaActiveLog.textContent = data.kometa_log_dir_display || data.kometa_log_dir || ''
+      }
+      if (kometaInstallMessage) {
+        kometaInstallMessage.textContent = data.message || 'Kometa choice saved.'
+      }
+      syncStartKometaModePill()
+      syncStartKometaInstallSaveState({ statusText: 'Saved.' })
+      if (typeof showToast === 'function') {
+        showToast('success', data.message || 'Kometa choice saved.')
+      }
+    } catch (err) {
+      syncStartKometaInstallSaveState({ statusText: 'Save failed.' })
+      if (typeof showToast === 'function') {
+        showToast('error', err.message || 'Unable to save the Kometa choice.')
+      }
+    }
+  }
+
+  if (kometaInstallSettings) {
+    document.querySelectorAll('input[name="start-kometa-install-mode"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        syncStartKometaInstallUi()
+        syncStartKometaInstallSaveState()
+      })
+    })
+    ;[kometaExistingRootInput, kometaExternalConfigInput, kometaExternalLogInput].forEach((input) => {
+      if (!input) return
+      input.addEventListener('input', () => {
+        syncStartKometaInstallSaveState()
+      })
+      input.addEventListener('change', () => {
+        syncStartKometaInstallSaveState()
+      })
+    })
+    if (kometaInstallSaveButton) {
+      kometaInstallSaveButton.addEventListener('click', saveStartKometaInstallChoice)
+    }
+    syncStartKometaInstallUi()
+    syncStartKometaInstallSaveState({ statusText: 'Saved.' })
+  }
+
   function updateButtonState () {
     if (!configSelector) return
     const isAddConfig = configSelector.value === 'add_config'
@@ -300,6 +520,8 @@ document.addEventListener('DOMContentLoaded', function () {
     updateButtonState()
     refreshWorkspaceStatusNow()
   }
+
+  window.qsApplyActiveConfigUi = applyActiveConfigUi
 
   async function activateConfig (name) {
     const normalized = sanitizeConfigName(name)

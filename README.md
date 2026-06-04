@@ -38,6 +38,13 @@ Kometa Quickstart is more than just a YAML generator - it's a full interactive e
 - **Automatic Backups:** Every config is saved as a versioned `.yml` file for historical reference
 - **Download & Run Anywhere:** Final configs can be downloaded and run outside Quickstart if preferred
 
+### Config Bundles
+- **Bundle export:** Quickstart can package a config as a ZIP bundle for backup, migration, restore, or sharing.
+- **What a bundle contains:** A bundle includes exactly one YAML config plus supported extras such as imported `.ttf` / `.otf` fonts, `README.txt`, and managed `metadata_files`, `collection_files`, and `overlay_files` content.
+- **Bundle import:** Quickstart previews bundle contents before import, imports supported sections and managed extras, and ignores unsupported payloads instead of blindly restoring everything.
+- **Restore behavior:** Importing a bundle creates or updates a Quickstart config profile, copies supported bundle assets into the workspace, and then runs validation/mapping flows before the imported config is treated as ready.
+- **Clean YAML vs full bundle:** Use plain YAML when you only want the config text. Use a bundle when you also want the managed assets and fonts that belong with that config.
+
 ### Guided, Validated Workflow
 - **Step-by-Step Pages:** Each section validates its own data, giving you instant feedback before proceeding
 - **Library Telemetry:** Pulls real Plex server data (Plex Pass status, library types, agent/scanner compatibility)
@@ -60,14 +67,24 @@ Kometa Quickstart is more than just a YAML generator - it's a full interactive e
 - **Config Before Runtime:** Quickstart builds and validates the generated config before checking Kometa or showing run controls
 - **Kometa Update Guidance:** Missing Kometa is a hard blocker, while available Kometa updates are shown as guidance without blocking the run command
 
+### Kometa Runtime Modes
+- **Managed:** Quickstart installs and manages its own Kometa runtime inside the workspace. This gives the clearest support model and the full Quickstart runner experience.
+- **Existing direct install:** Quickstart uses a real Kometa install it can directly access from the same environment. This must be the folder that contains `kometa.py`, `requirements.txt`, and `config/`.
+- **External / containerized config path:** Quickstart does not control the Kometa runtime. Instead, it writes the generated YAML and managed assets to an external `config` path and can optionally read logs from an external log path.
+- **Use `existing direct` when:** Quickstart can validate, check version/update availability, and launch the same Kometa install you already use, but you want to update that install manually outside Quickstart.
+- **Use `external` when:** Quickstart can only see a mounted `config` folder such as a Docker/NAS/remote path, but not the Kometa runtime itself.
+- **Existing direct tradeoffs:** Quickstart will not modify that Kometa install in place. If Quickstart detects a newer Kometa version, update the install manually outside Quickstart before running.
+- **External mode tradeoffs:** Quickstart cannot launch or update Kometa directly in this mode. Analytics and logscan only work if the external log path is accessible, and Quickstart-specific run markers, resume hints, and maintenance-window orchestration metadata will not exist for runs launched outside Quickstart.
+
 ### Built-in App Runners
 
 #### Kometa
-- **One-Click Execution:** The Kometa page creates a Kometa virtual environment (if needed), installs dependencies, and runs `kometa.py` against the generated config
+- **One-Click Execution:** In `managed` mode, the Kometa page creates a Kometa virtual environment (if needed), installs dependencies, and runs `kometa.py` against the generated config
 - **Run Command Builder:** Dynamically builds and previews CLI commands with flags like `--run`, `--operations-only`, `--times`, etc.
-- **Process Management:** Start, stop, and monitor Kometa runs directly from the web interface
+- **Process Management:** In `managed` and `existing direct` modes, start, stop, and monitor Kometa runs directly from the web interface
 - **Maintenance-Aware Runs:** Detects Plex maintenance windows, pauses active runs, and queues new runs until maintenance ends (with global UI badges and toasts)
 - **Incomplete Run Recovery:** If a Kometa run stops early, Quickstart preserves the run context and surfaces resume or recovery guidance when it can determine the affected scope
+- **Mode-aware final page:** In `managed` mode, the final Kometa page includes install/update controls and run controls. In `existing direct` mode, the same page can validate the install, check version/update availability, and launch runs, but updates must be done manually outside Quickstart. In `external` mode, the page becomes a sync/status view that shows the external config target, log availability, and mode limitations instead of runtime controls.
 
 This reduces the chance of Plex background maintenance colliding with long Kometa runs, keeps Plex more responsive during the window, and avoids wasting time starting a run that would immediately pause.
 
@@ -88,7 +105,7 @@ This reduces the chance of Plex background maintenance colliding with long Komet
 
 ### Automatic Updates
 - **Quickstart Self-Updater:** One-click update to latest master or develop branch
-- **Kometa Sync:** Option to pull and update Kometa itself (nightly/master) before running
+- **Kometa Sync:** In `managed` mode, Quickstart can pull and update Kometa itself (nightly/master) before running. In `existing direct` mode, Quickstart only checks version/update availability and expects you to update that install manually outside Quickstart.
 - **ImageMaid Sync:** Option to pull and update ImageMaid itself (develop/master) before running
 
 ### Themes & Personalization
@@ -96,6 +113,7 @@ This reduces the chance of Plex background maintenance colliding with long Komet
 
 ### Analytics
 - **Cross-app history:** Analytics tracks both Kometa and ImageMaid runs from Quickstart-managed runtime logs and archives
+- **External Kometa awareness:** If you use external Kometa mode and Quickstart can read the configured external log path, Analytics can still ingest those logs, but runs launched outside Quickstart will be missing Quickstart-specific markers and maintenance metadata
 - **Reingest & analytics:** Rebuild run history from:
   - `config/kometa/config/logs`
   - `config/imagemaid/config/logs`
@@ -134,12 +152,13 @@ How it works:
 
 ### Import Existing Config
 - **Import Config:** Launch import from `Manage Configs` in the Utilities menu to prefill settings, libraries, and templates.
-- **YAML or ZIP:** Zip files must contain exactly one YAML config; `.ttf`/`.otf` fonts in the zip will be imported.
+- **YAML or Config Bundle ZIP:** Zip imports must contain exactly one YAML config. Supported extras are limited to `.ttf` / `.otf` fonts, `README.txt`, and managed `metadata_files`, `collection_files`, and `overlay_files` content.
 - **Preview required:** Quickstart always runs a preview before import and shows a line‑by‑line report (`imported / not imported`) with filters (All/Imported/Not Imported/Comments) and a downloadable report.
 - **Plex credentials prompt:** If the import contains libraries, Plex validation is required for mapping. Quickstart will prompt for Plex URL/token if none are present; if the credentials in the file fail validation, you’ll be prompted to correct them and re‑run Preview.
 - **Library mapping:** Imported library names must be mapped to Plex libraries (or ignored) before confirming the import; you can re‑preview after mapping.
 - **Metadata file import:** Library `metadata_files` import supports `file`, `folder`, `url`, `git`, and `repo` entries. Quickstart currently validates file or folder resolution, YAML parsing, and a non-empty top-level `metadata:` mapping, but it does not fully validate Kometa metadata schema yet.
 - **Collection file import:** Library `collection_files` import supports `file`, `folder`, `url`, `git`, and `repo` entries. Quickstart currently validates file or folder resolution, YAML parsing, and a non-empty top-level `collections:` mapping, but it does not fully validate Kometa collection file schema yet.
+- **Unsupported bundle contents:** Files outside the supported config/font/managed-asset set are reported during preview instead of being silently imported.
 - **After import:** Quickstart stays on the Welcome page, runs bulk validation automatically, then refreshes the workspace status for the imported config.
 
 #### What happens after import?
@@ -176,8 +195,10 @@ Special thanks to [meisnate12](https://github.com/meisnate12), [bullmoose20](htt
   - [Multiple Ways to Run Quickstart](#multiple-ways-to-run-quickstart)
   - [Safe Playground Mode](#safe-playground-mode)
   - [Config Management \& History](#config-management--history)
-  - [Guided, Validated Workflow](#guided-validated-workflow)
+  - [Config Bundles](#config-bundles)
+- [Guided, Validated Workflow](#guided-validated-workflow)
   - [Kometa Gates](#kometa-gates)
+  - [Kometa Runtime Modes](#kometa-runtime-modes)
   - [Built-in App Runners](#built-in-app-runners)
     - [Kometa](#kometa)
     - [ImageMaid](#imagemaid)
@@ -213,7 +234,13 @@ Special thanks to [meisnate12](https://github.com/meisnate12), [bullmoose20](htt
 
 ## Prerequisites
 
-We recommend completing the Kometa installation walkthrough before running Quickstart. This prepares Kometa to accept the configuration file Quickstart generates. Running Quickstart first may lead to mismatches with the walkthrough and issues that the walkthrough does not address.
+Whether you should complete the Kometa installation walkthrough before running Quickstart depends on the Kometa runtime mode you plan to use:
+
+- **Managed:** Optional. Quickstart can create and manage its own Kometa runtime inside the workspace.
+- **Existing direct install:** Recommended. This prepares the Kometa install Quickstart will validate, check, and launch directly. Updates for that install should be done manually outside Quickstart.
+- **External / containerized config path:** Optional for Quickstart itself. Use this mode when Quickstart only needs to write config and optionally read logs from an external Kometa setup.
+
+Running Quickstart first is now a valid path if you plan to use `managed` mode. The walkthrough remains useful when you intend to point Quickstart at an already-installed Kometa runtime.
 
 Completing the walkthrough will also familiarize you with creating a Python virtual environment, which is recommended when running this as a Python script.
 

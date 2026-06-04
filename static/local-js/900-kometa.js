@@ -731,8 +731,11 @@ $(document).ready(function () {
 
     if (!$panel.length) return
 
+    const installMode = getConfiguredKometaInstallMode()
     let title = 'Run command is not ready yet'
-    let message = 'Open Prepare Kometa to install, validate, or update the local Kometa setup before running.'
+    let message = installMode === 'existing'
+      ? 'Open Prepare Kometa to validate the existing Kometa setup and check whether it needs a manual update before running.'
+      : 'Open Prepare Kometa to install, validate, or update the local Kometa setup before running.'
     let showButton = true
 
     if (!showYAML) {
@@ -1003,7 +1006,55 @@ $(document).ready(function () {
     if (checkbox.length) checkbox.on('change', buildCommand)
   })
 
+  function getConfiguredKometaInstallMode () {
+    const $out = $('#run-command-output')
+    const raw = ($out.data('kometa-install-mode') || 'managed').toString().trim().toLowerCase()
+    if (raw === 'existing' || raw === 'external') return raw
+    return 'managed'
+  }
+
+  function getConfiguredKometaRootPosix () {
+    const $out = $('#run-command-output')
+    const selected = ($out.data('kometa-root-selected') || '').toString().trim()
+    const fallback = ($out.data('kometa-root-default') || '').toString().trim()
+    const configDir = ($out.data('kometa-config-dir') || '').toString().trim()
+    if (getConfiguredKometaInstallMode() === 'external') return configDir
+    return selected || fallback
+  }
+
+  function getConfiguredKometaRootDisplay () {
+    const $out = $('#run-command-output')
+    const selected = ($out.data('kometa-root-selected-display') || '').toString().trim()
+    const fallback = ($out.data('kometa-root-default-display') || getConfiguredKometaRootPosix())
+    const configDir = ($out.data('kometa-config-dir-display') || '').toString().trim()
+    if (getConfiguredKometaInstallMode() === 'external') return configDir || getConfiguredKometaRootPosix()
+    return selected || fallback
+  }
+
+  function kometaCanLaunch () {
+    return ($('#run-command-output').data('kometa-can-launch') || '').toString().toLowerCase() === 'true'
+  }
+
+  function kometaCanCheckUpdateStatus () {
+    return getConfiguredKometaInstallMode() !== 'external' && kometaCanProbeRuntime()
+  }
+
+  function kometaCanProbeRuntime () {
+    return ($('#run-command-output').data('kometa-can-probe-runtime') || '').toString().toLowerCase() === 'true'
+  }
+
+  function kometaCanReadLogs () {
+    return ($('#run-command-output').data('kometa-can-read-logs') || '').toString().toLowerCase() === 'true'
+  }
+
   function validateKometaRoot (options = {}) {
+    if (!kometaCanProbeRuntime()) {
+      appendKometaStatusLine('ℹ️ Runtime validation is not available in external Kometa mode. Quickstart can sync config and optional logs, but it cannot validate or launch the runtime directly.')
+      KOMETA_VALIDATION_IN_PROGRESS = false
+      KOMETA_VALIDATED = false
+      syncKometaRollupBadge()
+      return
+    }
     if (KOMETA_VALIDATION_IN_PROGRESS) return
     KOMETA_VALIDATION_IN_PROGRESS = true
     setKometaUpdatePhaseBadge('validating')
@@ -1017,9 +1068,20 @@ $(document).ready(function () {
     const $out = $('#run-command-output')
 
     const configName = $out.data('config-filename')
-    const defaultRootPosix = ($out.data('kometa-root-default') || '').toString().trim()
-    const defaultRootDisplay = ($out.data('kometa-root-default-display') || defaultRootPosix)
+    const configuredRootPosix = getConfiguredKometaRootPosix()
+    const configuredRootDisplay = getConfiguredKometaRootDisplay()
+    const configuredInstallMode = getConfiguredKometaInstallMode()
     const appendStatus = Boolean(options.appendStatus)
+
+    if (!configuredRootPosix) {
+      $logBox.text('❌ Quickstart does not have a Kometa install path selected for this config yet.\nOpen the Start page and choose whether this config uses a Quickstart-managed install or an existing install.\n')
+      if ($spinner.length) $spinner.hide()
+      $runNow.prop('disabled', true)
+      KOMETA_VALIDATION_IN_PROGRESS = false
+      KOMETA_VALIDATED = false
+      syncKometaRollupBadge()
+      return
+    }
 
     if (appendStatus) {
       $logBox.append(
@@ -1039,8 +1101,7 @@ $(document).ready(function () {
       type: 'POST',
       url: '/validate-kometa-root',
       contentType: 'application/json',
-      // ✅ send the *normalized* path to the backend
-      data: JSON.stringify({ path: defaultRootPosix, config_name: configName }),
+      data: JSON.stringify({ path: configuredRootPosix, config_name: configName, install_mode: configuredInstallMode }),
       success: (res) => {
         KOMETA_LOCAL_CHECK_COMPLETED = true
         if (Array.isArray(res.log)) res.log.forEach(line => $logBox.append(`${line}\n`))
@@ -1051,9 +1112,9 @@ $(document).ready(function () {
           if (res.kometa_version) $logBox.append(`📦 Local Kometa version: ${res.kometa_version}\n`)
 
           // ✅ Prefer display paths for UI; keep posix for internal if needed
-          const kometaRootDisplay = (res.kometa_root_display || res.kometa_root || defaultRootDisplay)
+          const kometaRootDisplay = (res.kometa_root_display || res.kometa_root || configuredRootDisplay)
           const venvPythonDisplay = (res.venv_python_display || res.venv_python || 'python3')
-          const kometaRootPosix = (res.kometa_root || defaultRootPosix)
+          const kometaRootPosix = (res.kometa_root || configuredRootPosix)
           const venvPythonPosix = (res.venv_python || venvPythonDisplay)
 
           // For command builder (UI shows native separators)
@@ -1130,23 +1191,27 @@ $(document).ready(function () {
 
   function probeKometaRoot () {
     const $out = $('#run-command-output')
-    const defaultRootPosix = ($out.data('kometa-root-default') || '').toString().trim()
-    const defaultRootDisplay = ($out.data('kometa-root-default-display') || defaultRootPosix)
-    if (!defaultRootPosix) return Promise.resolve(null)
+    const configuredRootPosix = getConfiguredKometaRootPosix()
+    const configuredRootDisplay = getConfiguredKometaRootDisplay()
+    const configuredInstallMode = getConfiguredKometaInstallMode()
+    if (!configuredRootPosix) {
+      appendKometaStatusLine('❌ No Kometa install path is selected for this config yet.')
+      return Promise.resolve(null)
+    }
 
     return $.ajax({
       type: 'POST',
       url: '/probe-kometa-root',
       contentType: 'application/json',
-      data: JSON.stringify({ path: defaultRootPosix }),
+      data: JSON.stringify({ path: configuredRootPosix, install_mode: configuredInstallMode }),
       success: (res) => {
         KOMETA_LOCAL_CHECK_COMPLETED = true
         KOMETA_INSTALLED = !!res.kometa_installed
         if (Array.isArray(res.log)) res.log.forEach(line => appendKometaStatusLine(line))
 
-        const kometaRootDisplay = (res.kometa_root_display || res.kometa_root || defaultRootDisplay)
+        const kometaRootDisplay = (res.kometa_root_display || res.kometa_root || configuredRootDisplay)
         const venvPythonDisplay = (res.venv_python_display || res.venv_python || 'python3')
-        const kometaRootPosix = (res.kometa_root || defaultRootPosix)
+        const kometaRootPosix = (res.kometa_root || configuredRootPosix)
         const venvPythonPosix = (res.venv_python || venvPythonDisplay)
 
         $out.data('kometa-root', kometaRootDisplay)
@@ -1179,15 +1244,24 @@ $(document).ready(function () {
   }
 
   function checkKometaUpdate (forceRefresh = false) {
-    const $out = $('#run-command-output')
-    const defaultRootPosix = ($out.data('kometa-root-default') || '').toString().trim()
+    if (!kometaCanCheckUpdateStatus()) {
+      appendKometaStatusLine('ℹ️ Update checks are not available in external Kometa mode.')
+      return Promise.resolve({
+        success: true,
+        update_check_completed: false,
+        kometa_update_check_skipped: true,
+        kometa_update_available: false
+      })
+    }
+    const configuredRootPosix = getConfiguredKometaRootPosix()
+    const configuredInstallMode = getConfiguredKometaInstallMode()
     const branchOverride = getKometaBranchOverride()
-    if (!defaultRootPosix) return Promise.resolve(null)
+    if (!configuredRootPosix) return Promise.resolve(null)
 
     return fetch('/check-kometa-update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: defaultRootPosix, force: forceRefresh, branch_override: branchOverride })
+      body: JSON.stringify({ path: configuredRootPosix, install_mode: configuredInstallMode, force: forceRefresh, branch_override: branchOverride })
     })
       .then(async res => {
         const data = await res.json()
@@ -1517,6 +1591,12 @@ $(document).ready(function () {
     invalidateKometaUpdateStatus()
     return probeKometaRoot()
       .then((res) => {
+        if (getConfiguredKometaInstallMode() === 'external') {
+          appendKometaStatusLine('')
+          appendKometaStatusLine('ℹ️ External Kometa mode detected. Quickstart will not perform runtime update checks in this mode.')
+          if (!KOMETA_UPDATING) setKometaUpdatePhaseBadge('idle')
+          return res
+        }
         if (!res || !res.kometa_installed) {
           appendKometaStatusLine('')
           appendKometaStatusLine('ℹ️ Remote update check skipped because Kometa is not installed.')
@@ -2184,6 +2264,10 @@ $(document).ready(function () {
   }
 
   function getUpdateButtonLabel () {
+    const installMode = getConfiguredKometaInstallMode()
+    if (installMode === 'existing') {
+      return `<i class="bi bi-arrow-clockwise me-1"></i> ${KOMETA_UPDATE_CHECK_COMPLETED ? 'Recheck Existing Status' : 'Check Existing Status'}`
+    }
     const force = $forceUpdateToggle.is(':checked')
     const label = force
       ? (KOMETA_INSTALLED ? 'Force Update Kometa' : 'Force Install Kometa')
@@ -2201,6 +2285,35 @@ $(document).ready(function () {
   }
 
   function callUpdateKometa () {
+    const installMode = getConfiguredKometaInstallMode()
+    if (installMode === 'external') {
+      showToast('info', 'External Kometa mode cannot update the runtime. Quickstart can only sync config and optional logs in this mode.')
+      return
+    }
+    if (installMode === 'existing') {
+      $updateKometaBtn.prop('disabled', true).html('<i class="bi bi-arrow-repeat me-1"></i> Checking...')
+      runKometaStatusPass(true)
+        .then((data) => {
+          if (!data) return
+          if (data.kometa_update_available) {
+            showToast('warning', `Kometa update available: ${data.local_version} → ${data.remote_version}. Update this existing install manually outside Quickstart.`)
+            const noteEl = document.getElementById('kometa-update-box-note')
+            if (noteEl) {
+              noteEl.textContent = 'Update this existing Kometa install manually outside Quickstart before running.'
+            }
+          } else if (!data.kometa_update_check_skipped) {
+            showToast('success', 'Existing Kometa install checked. No newer version was detected.')
+          }
+        })
+        .catch(() => {
+          showToast('error', 'Failed to check existing Kometa status.')
+        })
+        .finally(() => {
+          $updateKometaBtn.prop('disabled', false)
+          syncUpdateButtonLabel()
+        })
+      return
+    }
     if (KOMETA_STATUS === 'running') {
       showToast('info', 'Kometa is currently running; update skipped.')
       return
@@ -2213,6 +2326,8 @@ $(document).ready(function () {
     const $runBox = $('#run-command-box')
     const qsBranch = $btn.data('qs-branch') || 'master'
     const branchOverride = getKometaBranchOverride()
+    const configuredRootPosix = getConfiguredKometaRootPosix()
+    const configuredInstallMode = getConfiguredKometaInstallMode()
     const forceUpdate = $forceUpdateToggle.is(':checked')
 
     if (KOMETA_INSTALLED && !forceUpdate && !KOMETA_UPDATE_AVAILABLE) {
@@ -2297,7 +2412,7 @@ $(document).ready(function () {
     fetch('/update-kometa', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch: qsBranch, branch_override: branchOverride, force: forceUpdate, background: true })
+      body: JSON.stringify({ branch: qsBranch, branch_override: branchOverride, path: configuredRootPosix, install_mode: configuredInstallMode, force: forceUpdate, background: true })
     })
       .then(async res => {
         const data = await res.json()
@@ -3022,6 +3137,9 @@ $(document).ready(function () {
       })
       .catch(() => showToast('error', 'Failed to download log.'))
   })
+  if (!kometaCanReadLogs()) {
+    $downloadLogBtn.prop('disabled', true)
+  }
   updateClearFilterButton()
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) {
@@ -3039,6 +3157,10 @@ $(document).ready(function () {
     .finally(() => {
       if (!document.getElementById('kometa-validation-log')) return
       if (KOMETA_STATUS === 'running') return
+      if (!kometaCanProbeRuntime()) {
+        appendKometaStatusLine('ℹ️ External Kometa mode active. Runtime validation, launch, and update controls are disabled; generated config still syncs to the configured Kometa path.')
+        return
+      }
       Promise.resolve(runKometaStatusPass(false))
         .finally(() => {
           const stage = getFinalGateState().stage
@@ -3052,6 +3174,7 @@ $(document).ready(function () {
     kometaActionsCollapse.addEventListener('show.bs.collapse', () => {
       const stage = getFinalGateState().stage
       if (stage === 'todo' || stage === 'freshness') return
+      if (!kometaCanProbeRuntime()) return
       if (KOMETA_STATUS === 'running') {
         if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
           bootstrap.Collapse.getOrCreateInstance(kometaActionsCollapse, { toggle: false }).hide()
@@ -3065,6 +3188,10 @@ $(document).ready(function () {
 
   if (runCommandCollapse) {
     runCommandCollapse.addEventListener('show.bs.collapse', () => {
+      if (!kometaCanLaunch()) {
+        setRunCommandPlaceholderState()
+        return
+      }
       if (KOMETA_STATUS === 'running') {
         clearRunCommandPlaceholderState()
         return
@@ -3379,6 +3506,10 @@ $(document).ready(function () {
   }
 
   $('#run-now').on('click', function () {
+    if (!kometaCanLaunch()) {
+      showToast('info', 'External Kometa mode cannot launch Kometa from Quickstart. Quickstart can only sync config and optional logs in this mode.')
+      return
+    }
     startKometaCommand(getCurrentRunCommand(), {
       startMode: 'current',
       requireValidated: true,

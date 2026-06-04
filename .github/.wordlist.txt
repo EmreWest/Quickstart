@@ -26,6 +26,7 @@ MacOS
 MDBList
 meisnate
 MyAnimeList
+NAS
 OMDb
 Personalization
 Plex
@@ -47,6 +48,7 @@ Sortable
 Tautulli
 tmdb
 TODO
+tradeoffs
 Trakt
 truthy
 txt
