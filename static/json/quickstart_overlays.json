@@ -2879,10 +2879,395 @@
         "template_variables": [
           {
             "type": "toggle",
+            "key": "use_resolution",
+            "label": "Use Resolution",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_4k",
+            "label": "Use 4k",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_1080p",
+            "label": "Use 1080p",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_720p",
+            "label": "Use 720p",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_576p",
+            "label": "Use 576p",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_480p",
+            "label": "Use 480p",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_dv",
+            "label": "Use Dolby Vision",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_hlg",
+            "label": "Use HLG",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_hdr",
+            "label": "Use HDR",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_dvhdrplus",
+            "label": "Use DV/HDR10+",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
             "key": "use_edition",
             "label": "Use Edition",
             "value": "true",
-            "default": false,
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_extended",
+            "label": "Use Extended Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_uncut",
+            "label": "Use Uncut Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_unrated",
+            "label": "Use Unrated Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_special",
+            "label": "Use Special Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_anniversary",
+            "label": "Use Anniversary Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_collector",
+            "label": "Use Collector's Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_diamond",
+            "label": "Use Diamond Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_platinum",
+            "label": "Use Platinum Edition",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_directors",
+            "label": "Use Director's Cut",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_final",
+            "label": "Use Final Cut",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_international",
+            "label": "Use International Cut",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_theatrical",
+            "label": "Use Theatrical Cut",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_ultimate",
+            "label": "Use Ultimate Cut",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_alternate",
+            "label": "Use Alternate Cut",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_coda",
+            "label": "Use Coda Cut",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_enhanced",
+            "label": "Use IMAX Enhanced",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_imax",
+            "label": "Use IMAX",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_remastered",
+            "label": "Use Remastered",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_criterion",
+            "label": "Use Criterion",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_richarddonner",
+            "label": "Use Richard Donner",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_blackchrome",
+            "label": "Use Black and Chrome",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_definitive",
+            "label": "Use Definitive",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_openmatte",
+            "label": "Use Open Matte",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_ulysses",
+            "label": "Use Ulysses",
+            "value": "true",
+            "default": true,
+            "options": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "type": "toggle",
+            "key": "use_producers",
+            "label": "Use Producer's Cut",
+            "value": "true",
+            "default": true,
             "options": [
               "true",
               "false"
