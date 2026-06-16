@@ -172,6 +172,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -783,6 +827,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -1362,6 +1450,50 @@
             "media_types": [
               "movie"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -1945,6 +2077,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -2388,7 +2564,7 @@
       },
       {
         "id": "collection_cesar",
-        "label": "César Awards",
+        "label": "C\u00e9sar Awards",
         "url": "https://kometa.wiki/en/nightly/defaults/award/cesar",
         "image_url": "https://kometa.wiki/en/nightly/assets/images/defaults/posters/cesar.png",
         "media_types": [
@@ -2510,8 +2686,8 @@
           },
           {
             "key": "use_best",
-            "label": "César Best Film Winners",
-            "tooltip": "Collection of César Award Winners.",
+            "label": "C\u00e9sar Best Film Winners",
+            "tooltip": "Collection of C\u00e9sar Award Winners.",
             "type": "toggle",
             "default": true
           },
@@ -2524,6 +2700,50 @@
             "media_types": [
               "movie"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -2582,9 +2802,9 @@
           },
           {
             "key": "visible_home_best",
-            "label": "César Best Film Winners Visible Home",
+            "label": "C\u00e9sar Best Film Winners Visible Home",
             "type": "toggle",
-            "tooltip": "Changes the César Best Film Winners collection visible on Home Tab (Only works with Plex Pass)",
+            "tooltip": "Changes the C\u00e9sar Best Film Winners collection visible on Home Tab (Only works with Plex Pass)",
             "default": false,
             "media_types": [
               "movie"
@@ -2592,9 +2812,9 @@
           },
           {
             "key": "visible_library_best",
-            "label": "César Best Film Winners Visible Library",
+            "label": "C\u00e9sar Best Film Winners Visible Library",
             "type": "toggle",
-            "tooltip": "Changes the César Best Film Winners collection visible on Library Recommended Tab (Only works with Plex Pass)",
+            "tooltip": "Changes the C\u00e9sar Best Film Winners collection visible on Library Recommended Tab (Only works with Plex Pass)",
             "default": false,
             "media_types": [
               "movie"
@@ -2602,9 +2822,9 @@
           },
           {
             "key": "visible_shared_best",
-            "label": "César Best Film Winners Visible Shared",
+            "label": "C\u00e9sar Best Film Winners Visible Shared",
             "type": "toggle",
-            "tooltip": "Changes the César Best Film Winners collection visible on Shared Users' Home Tab (Only works with Plex Pass)",
+            "tooltip": "Changes the C\u00e9sar Best Film Winners collection visible on Shared Users' Home Tab (Only works with Plex Pass)",
             "default": false,
             "media_types": [
               "movie"
@@ -3116,6 +3336,50 @@
             "media_types": [
               "show"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -3690,6 +3954,50 @@
             "media_types": [
               "show"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -4293,6 +4601,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -4877,6 +5229,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -5456,6 +5852,50 @@
             "media_types": [
               "movie"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -6050,6 +6490,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -6611,6 +7095,50 @@
             "media_types": [
               "movie"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -7194,6 +7722,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -7773,6 +8345,50 @@
             "media_types": [
               "movie"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -8356,6 +8972,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -8929,6 +9589,50 @@
             ]
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -9410,8 +10114,11 @@
             "key": "limit",
             "label": "Limit",
             "tooltip": "Changes the Builder Limit for all collections in this Defaults File.",
-            "type": "number",
-            "default": 100
+            "type": "text_input",
+            "default": 100,
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_episodes",
@@ -9426,13 +10133,16 @@
           },
           {
             "key": "limit_episodes",
-            "label": "Limit",
+            "label": "New Episodes Limit",
             "tooltip": "Changes the Builder Limit of the New Episodes collection.",
-            "type": "number",
+            "type": "text_input",
             "default": "limit",
             "media_types": [
               "show"
-            ]
+            ],
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "sonarr_add_missing_episodes",
@@ -9454,10 +10164,13 @@
           },
           {
             "key": "limit_released",
-            "label": "Limit",
+            "label": "Newly Released Limit",
             "tooltip": "Changes the Builder Limit of the Newly Released collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_released",
@@ -9489,6 +10202,23 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -9951,14 +10681,20 @@
             "label": "List Days",
             "type": "text_input",
             "default": "30",
-            "tooltip": "Changes the list_days attribute of the Builder for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the list_days attribute of the Builder for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "list_size",
             "label": "List Size",
             "type": "text_input",
             "default": "20",
-            "tooltip": "Changes the list_size attribute of the Builder for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the list_size attribute of the Builder for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_popular",
@@ -9972,13 +10708,19 @@
             "key": "list_days_popular",
             "label": "Plex Popular List Days",
             "type": "text_input",
-            "tooltip": "Changes the list_days attribute of the Plex Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Days value."
+            "tooltip": "Changes the list_days attribute of the Plex Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Days value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "list_size_popular",
             "label": "Plex Popular List Size",
             "type": "text_input",
-            "tooltip": "Changes the list_size attribute of the Plex Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Size value."
+            "tooltip": "Changes the list_size attribute of the Plex Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Size value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_watched",
@@ -9992,13 +10734,19 @@
             "key": "list_days_watched",
             "label": "Plex Watched List Days",
             "type": "text_input",
-            "tooltip": "Changes the list_days attribute of the Plex Watched collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Days value."
+            "tooltip": "Changes the list_days attribute of the Plex Watched collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Days value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "list_size_watched",
             "label": "Plex Watched List Size",
             "type": "text_input",
-            "tooltip": "Changes the list_size attribute of the Plex Watched collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Size value."
+            "tooltip": "Changes the list_size attribute of the Plex Watched collection. Valid values are numbers greater than 0. Leave blank to inherit the family List Size value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "style",
@@ -10010,6 +10758,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 0,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -10478,7 +11270,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_top",
@@ -10574,6 +11369,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -11064,7 +11903,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "100",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_airing",
@@ -11077,7 +11919,10 @@
             "key": "limit_airing",
             "label": "TMDb Airing Today Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the TMDb Airing Today collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the TMDb Airing Today collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_airing",
@@ -11110,7 +11955,10 @@
             "key": "limit_air",
             "label": "TMDb On The Air Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the TMDb On The Air collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the TMDb On The Air collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_air",
@@ -11143,7 +11991,10 @@
             "key": "limit_popular",
             "label": "TMDb Popular Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the TMDb Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the TMDb Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_popular",
@@ -11176,7 +12027,10 @@
             "key": "limit_top",
             "label": "TMDb Top Rated Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the TMDb Top Rated collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the TMDb Top Rated collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_top",
@@ -11209,7 +12063,10 @@
             "key": "limit_trending",
             "label": "TMDb Trending Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the TMDb Trending collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the TMDb Trending collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_trending",
@@ -11241,6 +12098,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -11775,7 +12676,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "100",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_collected",
@@ -11788,7 +12692,10 @@
             "key": "limit_collected",
             "label": "Trakt Collected Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Trakt Collected collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Trakt Collected collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_collected",
@@ -11821,7 +12728,10 @@
             "key": "limit_popular",
             "label": "Trakt Popular Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Trakt Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Trakt Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_popular",
@@ -11854,7 +12764,10 @@
             "key": "limit_recommended",
             "label": "Trakt Recommended Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Trakt Recommended collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Trakt Recommended collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_recommended",
@@ -11887,7 +12800,10 @@
             "key": "limit_trending",
             "label": "Trakt Trending Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Trakt Trending collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Trakt Trending collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_trending",
@@ -11920,7 +12836,10 @@
             "key": "limit_watched",
             "label": "Trakt Watched Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Trakt Watched collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Trakt Watched collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_watched",
@@ -11952,6 +12871,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -12483,7 +13446,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "100",
-            "tooltip": "Maximum number of items to return per Simkl list. Valid range is 1 to 500."
+            "tooltip": "Maximum number of items to return per Simkl list. Valid range is 1 to 500.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_trending_today",
@@ -12496,7 +13462,10 @@
             "key": "limit_trending_today",
             "label": "Simkl Trending Today Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Simkl Trending Today collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Simkl Trending Today collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_trending_today",
@@ -12529,7 +13498,10 @@
             "key": "limit_trending_week",
             "label": "Simkl Trending This Week Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Simkl Trending This Week collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Simkl Trending This Week collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_trending_week",
@@ -12562,7 +13534,10 @@
             "key": "limit_trending_month",
             "label": "Simkl Trending This Month Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Simkl Trending This Month collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Simkl Trending This Month collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_trending_month",
@@ -12595,7 +13570,10 @@
             "key": "limit_dvd",
             "label": "Simkl DVD Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Simkl DVD collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Simkl DVD collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_dvd",
@@ -12627,6 +13605,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -12810,7 +13832,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "100",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_popular",
@@ -12823,7 +13848,10 @@
             "key": "limit_popular",
             "label": "AniList Popular Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the AniList Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the AniList Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_popular",
@@ -12856,7 +13884,10 @@
             "key": "limit_season",
             "label": "AniList Season Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the AniList Season collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the AniList Season collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_season",
@@ -12889,7 +13920,10 @@
             "key": "limit_top",
             "label": "AniList Top Rated Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the AniList Top Rated collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the AniList Top Rated collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_top",
@@ -12922,7 +13956,10 @@
             "key": "limit_trending",
             "label": "AniList Trending Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the AniList Trending collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the AniList Trending collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_trending",
@@ -12954,6 +13991,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -13465,7 +14546,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "100",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "style",
@@ -13489,7 +14573,10 @@
             "key": "limit_favorited",
             "label": "MyAnimeList Favorited Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the MyAnimeList Favorited collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the MyAnimeList Favorited collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_favorited",
@@ -13522,7 +14609,10 @@
             "key": "limit_popular",
             "label": "MyAnimeList Popular Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the MyAnimeList Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the MyAnimeList Popular collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_popular",
@@ -13555,7 +14645,10 @@
             "key": "limit_season",
             "label": "MyAnimeList Season Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the MyAnimeList Season collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the MyAnimeList Season collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_season",
@@ -13588,7 +14681,10 @@
             "key": "limit_airing",
             "label": "MyAnimeList Top Airing Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the MyAnimeList Top Airing collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the MyAnimeList Top Airing collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_airing",
@@ -13621,7 +14717,10 @@
             "key": "limit_top",
             "label": "MyAnimeList Top Rated Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the MyAnimeList Top Rated collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the MyAnimeList Top Rated collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_top",
@@ -13642,6 +14741,50 @@
             "media_types": [
               "show"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -14172,8 +15315,11 @@
             "key": "limit",
             "label": "Limit",
             "tooltip": "Changes the Builder Limit for all collections in this Defaults File.",
-            "type": "number",
-            "default": 100
+            "type": "text_input",
+            "default": 100,
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_1001_movies",
@@ -14184,10 +15330,13 @@
           },
           {
             "key": "limit_1001_movies",
-            "label": "Limit",
+            "label": "1,001 To See Before You Die Limit",
             "tooltip": "Changes the Builder Limit of the 1,001 To See Before You Die collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_1001_movies",
@@ -14208,10 +15357,13 @@
           },
           {
             "key": "limit_afi_100",
-            "label": "Limit",
+            "label": "AFI 100 Years 100 Movies Limit",
             "tooltip": "Changes the Builder Limit of the AFI 100 Years 100 Movies collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_afi_100",
@@ -14232,10 +15384,13 @@
           },
           {
             "key": "limit_boxofficemojo_100",
-            "label": "Limit",
+            "label": "Box Office Mojo All Time 100 Limit",
             "tooltip": "Changes the Builder Limit of the Box Office Mojo All Time 100 collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_boxofficemojo_100",
@@ -14256,10 +15411,13 @@
           },
           {
             "key": "limit_cannes",
-            "label": "Limit",
+            "label": "Cannes Palme d'Or Winners Limit",
             "tooltip": "Changes the Builder Limit of the Cannes Palme d'Or Winners collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_cannes",
@@ -14280,10 +15438,13 @@
           },
           {
             "key": "limit_edgarwright",
-            "label": "Limit",
+            "label": "Edgar Wright's 1,000 Favorites Limit",
             "tooltip": "Changes the Builder Limit of the Edgar Wright's 1,000 Favorites collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_edgarwright",
@@ -14304,10 +15465,13 @@
           },
           {
             "key": "limit_imdb_top_250",
-            "label": "Limit",
+            "label": "IMDb Top 250 (Letterboxd) Limit",
             "tooltip": "Changes the Builder Limit of the IMDb Top 250 (Letterboxd) collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_imdb_top_250",
@@ -14328,10 +15492,13 @@
           },
           {
             "key": "limit_top_500",
-            "label": "Limit",
+            "label": "Letterboxd Top 500 Limit",
             "tooltip": "Changes the Builder Limit of the Letterboxd Top 500 collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_top_500",
@@ -14352,10 +15519,13 @@
           },
           {
             "key": "limit_international",
-            "label": "Limit",
+            "label": "Top 250 International Limit",
             "tooltip": "Changes the Builder Limit of the Top 250 International collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_international",
@@ -14376,10 +15546,13 @@
           },
           {
             "key": "limit_science",
-            "label": "Limit",
+            "label": "Top 250 Sci-Fi Films Limit",
             "tooltip": "Changes the Builder Limit of the Top 250 Sci-Fi Films collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_science",
@@ -14400,10 +15573,13 @@
           },
           {
             "key": "limit_western",
-            "label": "Limit",
+            "label": "Top 100 Western Films Limit",
             "tooltip": "Changes the Builder Limit of the Top 100 Western Films collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_western",
@@ -14424,10 +15600,13 @@
           },
           {
             "key": "limit_silent",
-            "label": "Limit",
+            "label": "Top 100 Silent Films Limit",
             "tooltip": "Changes the Builder Limit of the Top 100 Silent Films collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_silent",
@@ -14448,10 +15627,13 @@
           },
           {
             "key": "limit_million",
-            "label": "Limit",
+            "label": "One Million Watched Club Limit",
             "tooltip": "Changes the Builder Limit of the One Million Watched Club collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_million",
@@ -14472,10 +15654,13 @@
           },
           {
             "key": "limit_oscars",
-            "label": "Limit",
+            "label": "Oscar Best Picture Winners Limit",
             "tooltip": "Changes the Builder Limit of the Oscar Best Picture Winners collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_oscars",
@@ -14496,10 +15681,13 @@
           },
           {
             "key": "limit_rogerebert",
-            "label": "Limit",
+            "label": "Roger Ebert's Great Movies Limit",
             "tooltip": "Changes the Builder Limit of the Roger Ebert's Great Movies collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_rogerebert",
@@ -14520,10 +15708,13 @@
           },
           {
             "key": "limit_sight_sound",
-            "label": "Limit",
+            "label": "Sight & Sound Greatest Films Limit",
             "tooltip": "Changes the Builder Limit of the Sight & Sound Greatest Films collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_sight_sound",
@@ -14544,10 +15735,13 @@
           },
           {
             "key": "limit_animation",
-            "label": "Limit",
+            "label": "Top 100 Animation Limit",
             "tooltip": "Changes the Builder Limit of the Top 100 Animation collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_animation",
@@ -14568,10 +15762,13 @@
           },
           {
             "key": "limit_black_directors",
-            "label": "Limit",
+            "label": "Top 250 Black-Directed Limit",
             "tooltip": "Changes the Builder Limit of the Top 250 Black-Directed collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_black_directors",
@@ -14592,10 +15789,13 @@
           },
           {
             "key": "limit_documentaries",
-            "label": "Limit",
+            "label": "Top 250 Documentaries Limit",
             "tooltip": "Changes the Builder Limit of the Top 250 Documentaries collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_documentaries",
@@ -14616,10 +15816,13 @@
           },
           {
             "key": "limit_horror",
-            "label": "Limit",
+            "label": "Top 250 Horror Limit",
             "tooltip": "Changes the Builder Limit of the Top 250 Horror collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_horror",
@@ -14640,10 +15843,13 @@
           },
           {
             "key": "limit_most_fans",
-            "label": "Limit",
+            "label": "Top 250 Most Fans Limit",
             "tooltip": "Changes the Builder Limit of the Top 250 Most Fans collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_most_fans",
@@ -14664,10 +15870,13 @@
           },
           {
             "key": "limit_women_directors",
-            "label": "Limit",
+            "label": "Top 250 Women-Directed Limit",
             "tooltip": "Changes the Builder Limit of the Top 250 Women-Directed collection.",
-            "type": "number",
-            "default": "limit"
+            "type": "text_input",
+            "default": "limit",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_women_directors",
@@ -14689,6 +15898,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -15754,7 +17007,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_commonsense",
@@ -15860,6 +17116,50 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -16388,7 +17688,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -16403,6 +17706,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific Genres from these collections.",
             "placeholder": "Add genre name (e.g. Politics)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -16817,6 +18137,43 @@
             "placeholder": "Add TMDb collection ID (e.g. 131292)"
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br> Default is <b>2</b>. Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1,
+            "default": 2
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -16867,7 +18224,7 @@
             "label": "Collection Order",
             "type": "select",
             "tooltip": "Changes the Collection Order for all collections in a Defaults File.<br><br> Default is <b>Custom (sorted in a custom order)</b> ",
-            "default": "custom",
+            "default": "release",
             "options": [
               {
                 "value": "custom",
@@ -17239,6 +18596,43 @@
             "placeholder": "Leave blank or enter a value like 040"
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br> Default is <b>2</b>. Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1,
+            "default": 2
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -17289,7 +18683,7 @@
             "label": "Collection Order",
             "type": "select",
             "tooltip": "Changes the Collection Order for all collections in a Defaults File.<br><br> Default is <b>Custom (sorted in a custom order)</b> ",
-            "default": "custom",
+            "default": "release",
             "options": [
               {
                 "value": "custom",
@@ -17663,7 +19057,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -18083,6 +19480,51 @@
             "media_types": [
               "show"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br> Default is <b>2</b>. Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1,
+            "default": 2
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -18825,7 +20267,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "200",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -18948,6 +20393,23 @@
             "media_types": [
               "show"
             ]
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -19828,7 +21290,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -19848,7 +21313,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -19856,6 +21324,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. PG-13)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -20284,7 +21769,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -20304,7 +21792,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -20312,6 +21803,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. TV-14)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -20741,7 +22249,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -20761,7 +22272,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -20769,6 +22283,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. 15)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -21198,7 +22729,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -21218,7 +22752,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -21226,6 +22763,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. 12)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -21655,7 +23209,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -21675,7 +23232,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -21683,6 +23243,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. M)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -22112,7 +23689,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -22132,7 +23712,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -22140,6 +23723,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. PG)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -22569,7 +24169,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -22589,7 +24192,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -22597,6 +24203,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. PG-13)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -23026,7 +24649,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -23046,7 +24672,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -23054,6 +24683,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific content ratings from these collections.",
             "placeholder": "Add content rating (e.g. 13)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -23488,7 +25134,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -23519,7 +25168,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -23527,6 +25179,40 @@
             "type": "string_list",
             "tooltip": "Exclude specific countries from these collections.",
             "placeholder": "Add country name (e.g. France)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
           },
           {
             "key": "collection_mode",
@@ -23955,7 +25641,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -23986,7 +25675,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -23994,6 +25686,40 @@
             "type": "string_list",
             "tooltip": "Exclude specific countries from these collections.",
             "placeholder": "Add country name (e.g. France)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
           },
           {
             "key": "collection_mode",
@@ -24423,7 +26149,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -24454,7 +26183,10 @@
             "key": "limit_Northern Africa",
             "label": "Northern Africa Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Northern Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Northern Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Eastern Africa",
@@ -24467,7 +26199,10 @@
             "key": "limit_Eastern Africa",
             "label": "Eastern Africa Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Eastern Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Eastern Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Central Africa",
@@ -24480,7 +26215,10 @@
             "key": "limit_Central Africa",
             "label": "Central Africa Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Central Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Central Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Southern Africa",
@@ -24493,7 +26231,10 @@
             "key": "limit_Southern Africa",
             "label": "Southern Africa Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Southern Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Southern Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Western Africa",
@@ -24506,7 +26247,10 @@
             "key": "limit_Western Africa",
             "label": "Western Africa Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Western Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Western Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Caribbean",
@@ -24519,7 +26263,10 @@
             "key": "limit_Caribbean",
             "label": "Caribbean Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Caribbean collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Caribbean collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Central America",
@@ -24532,7 +26279,10 @@
             "key": "limit_Central America",
             "label": "Central America Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Central America collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Central America collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_South America",
@@ -24545,7 +26295,10 @@
             "key": "limit_South America",
             "label": "South America Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the South America collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the South America collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_North America",
@@ -24558,7 +26311,10 @@
             "key": "limit_North America",
             "label": "North America Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the North America collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the North America collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Antarctica",
@@ -24571,7 +26327,10 @@
             "key": "limit_Antarctica",
             "label": "Antarctica Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Antarctica collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Antarctica collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Central Asia",
@@ -24584,7 +26343,10 @@
             "key": "limit_Central Asia",
             "label": "Central Asia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Central Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Central Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Eastern Asia",
@@ -24597,7 +26359,10 @@
             "key": "limit_Eastern Asia",
             "label": "Eastern Asia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Eastern Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Eastern Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_South-Eastern Asia",
@@ -24610,7 +26375,10 @@
             "key": "limit_South-Eastern Asia",
             "label": "South-Eastern Asia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the South-Eastern Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the South-Eastern Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Southern Asia",
@@ -24623,7 +26391,10 @@
             "key": "limit_Southern Asia",
             "label": "Southern Asia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Southern Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Southern Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Western Asia",
@@ -24636,7 +26407,10 @@
             "key": "limit_Western Asia",
             "label": "Western Asia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Western Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Western Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Eastern Europe",
@@ -24649,7 +26423,10 @@
             "key": "limit_Eastern Europe",
             "label": "Eastern Europe Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Eastern Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Eastern Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Northern Europe",
@@ -24662,7 +26439,10 @@
             "key": "limit_Northern Europe",
             "label": "Northern Europe Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Northern Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Northern Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Southern Europe",
@@ -24675,7 +26455,10 @@
             "key": "limit_Southern Europe",
             "label": "Southern Europe Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Southern Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Southern Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Western Europe",
@@ -24688,7 +26471,10 @@
             "key": "limit_Western Europe",
             "label": "Western Europe Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Western Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Western Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Australia and New Zealand",
@@ -24701,7 +26487,10 @@
             "key": "limit_Australia and New Zealand",
             "label": "Australia and New Zealand Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Australia and New Zealand collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Australia and New Zealand collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Melanesia",
@@ -24714,7 +26503,10 @@
             "key": "limit_Melanesia",
             "label": "Melanesia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Melanesia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Melanesia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Micronesia",
@@ -24727,7 +26519,10 @@
             "key": "limit_Micronesia",
             "label": "Micronesia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Micronesia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Micronesia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Polynesia",
@@ -24740,7 +26535,10 @@
             "key": "limit_Polynesia",
             "label": "Polynesia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Polynesia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Polynesia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_other",
@@ -24753,7 +26551,10 @@
             "key": "limit_other",
             "label": "Other Regions Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other Regions collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other Regions collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -24761,6 +26562,40 @@
             "type": "string_list",
             "tooltip": "Exclude specific regions from these collections.",
             "placeholder": "Add region name (e.g. Melanesia)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
           },
           {
             "key": "collection_mode",
@@ -25673,7 +27508,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -25704,7 +27542,10 @@
             "key": "limit_Africa",
             "label": "Africa Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Africa collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Americas",
@@ -25717,7 +27558,10 @@
             "key": "limit_Americas",
             "label": "Americas Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Americas collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Americas collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Antarctica",
@@ -25730,7 +27574,10 @@
             "key": "limit_Antarctica",
             "label": "Antarctica Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Antarctica collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Antarctica collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Asia",
@@ -25743,7 +27590,10 @@
             "key": "limit_Asia",
             "label": "Asia Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Asia collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Europe",
@@ -25756,7 +27606,10 @@
             "key": "limit_Europe",
             "label": "Europe Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Europe collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_Oceania",
@@ -25769,7 +27622,10 @@
             "key": "limit_Oceania",
             "label": "Oceania Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Oceania collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Oceania collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_other",
@@ -25782,7 +27638,10 @@
             "key": "limit_other",
             "label": "Other Continents Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other Continents collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other Continents collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -25790,6 +27649,40 @@
             "type": "string_list",
             "tooltip": "Exclude specific continents from these collections.",
             "placeholder": "Add continent name (e.g. Europe)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
           },
           {
             "key": "collection_mode",
@@ -26351,7 +28244,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -26371,7 +28267,10 @@
             "key": "limit_1.33",
             "label": "1.33 - Academy Aperture Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 1.33 - Academy Aperture collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 1.33 - Academy Aperture collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_1.65",
@@ -26384,7 +28283,10 @@
             "key": "limit_1.65",
             "label": "1.65 - Early Widescreen Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 1.65 - Early Widescreen collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 1.65 - Early Widescreen collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_1.66",
@@ -26397,7 +28299,10 @@
             "key": "limit_1.66",
             "label": "1.66 - European Widescreen Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 1.66 - European Widescreen collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 1.66 - European Widescreen collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_1.78",
@@ -26410,7 +28315,10 @@
             "key": "limit_1.78",
             "label": "1.78 - Widescreen TV Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 1.78 - Widescreen TV collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 1.78 - Widescreen TV collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_1.85",
@@ -26423,7 +28331,10 @@
             "key": "limit_1.85",
             "label": "1.85 - American Widescreen Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 1.85 - American Widescreen collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 1.85 - American Widescreen collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_2.2",
@@ -26436,7 +28347,10 @@
             "key": "limit_2.2",
             "label": "2.2 - 70mm Frame Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 2.2 - 70mm Frame collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 2.2 - 70mm Frame collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_2.35",
@@ -26449,7 +28363,10 @@
             "key": "limit_2.35",
             "label": "2.35 - Anamorphic Projection Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 2.35 - Anamorphic Projection collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 2.35 - Anamorphic Projection collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_2.77",
@@ -26462,7 +28379,10 @@
             "key": "limit_2.77",
             "label": "2.77 - Cinerama Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the 2.77 - Cinerama collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the 2.77 - Cinerama collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "exclude",
@@ -26470,6 +28390,40 @@
             "type": "string_list",
             "tooltip": "Exclude specific aspect ratios from these collections.",
             "placeholder": "Add aspect ratio key (e.g. 1.65)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
           },
           {
             "key": "collection_mode",
@@ -27046,7 +29000,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -27088,6 +29045,23 @@
             "tooltip": "Exclude specific resolutions from these collections. Kometa code allows this with Include, but the wiki says not to combine them.",
             "placeholder": "Add resolution key (e.g. 4k)",
             "mutually_exclusive_with": "include"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -27496,7 +29470,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -27516,7 +29493,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "include",
@@ -27533,6 +29513,23 @@
             "tooltip": "Exclude specific audio languages from these collections. Kometa code allows this with Include, but the wiki says not to combine them.",
             "placeholder": "Add language code (e.g. fr)",
             "mutually_exclusive_with": "include"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -27962,7 +29959,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -27982,7 +29982,10 @@
             "key": "limit_other",
             "label": "Other Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Other collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "include",
@@ -27999,6 +30002,23 @@
             "tooltip": "Exclude specific subtitle languages from these collections. Kometa code allows this with Include, but the wiki says not to combine them.",
             "placeholder": "Add language code (e.g. fr)",
             "mutually_exclusive_with": "include"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -28515,6 +30535,23 @@
             "mutually_exclusive_with": "include"
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -28999,6 +31036,23 @@
             "tooltip": "Exclude specific people from these collections. Kometa code allows this with Include, but the wiki says not to combine them.",
             "placeholder": "Add person name (e.g. Jeremy Kleiner)",
             "mutually_exclusive_with": "include"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -29496,6 +31550,23 @@
             "mutually_exclusive_with": "include"
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -29991,6 +32062,23 @@
             "mutually_exclusive_with": "include"
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -30415,14 +32503,20 @@
             "label": "Limit",
             "type": "text_input",
             "default": "500",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "discover_limit",
             "label": "Discover Limit",
             "type": "text_input",
             "default": "0",
-            "tooltip": "Changes the TMDb Discover limit used for the streaming availability builder. Use 0 to keep the defaults file behavior."
+            "tooltip": "Changes the TMDb Discover limit used for the streaming availability builder. Use 0 to keep the defaults file behavior.",
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -30955,6 +33049,50 @@
             "type": "string_list",
             "tooltip": "Exclude specific streaming services from these collections.",
             "placeholder": "Add service key (e.g. netflix)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -31761,6 +33899,23 @@
             "mutually_exclusive_with": "include"
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -32199,6 +34354,23 @@
             "mutually_exclusive_with": "include"
           },
           {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
             "key": "collection_mode",
             "label": "Collection Mode",
             "type": "select",
@@ -32610,7 +34782,10 @@
             "key": "limit",
             "label": "Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -32630,7 +34805,10 @@
             "key": "limit_aapi",
             "label": "Asian American Pacific Islander Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Asian American Pacific Islander Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Asian American Pacific Islander Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_aapi",
@@ -32661,7 +34839,10 @@
             "key": "limit_black_history",
             "label": "Black History Month Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Black History Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Black History Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_black_history",
@@ -32692,7 +34873,10 @@
             "key": "limit_christmas",
             "label": "Christmas Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Christmas Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Christmas Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_christmas",
@@ -32723,7 +34907,10 @@
             "key": "limit_disabilities",
             "label": "Disability Month Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Disability Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Disability Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_disabilities",
@@ -32754,7 +34941,10 @@
             "key": "limit_easter",
             "label": "Easter Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Easter Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Easter Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_easter",
@@ -32785,7 +34975,10 @@
             "key": "limit_father",
             "label": "Father's Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Father's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Father's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_father",
@@ -32816,7 +35009,10 @@
             "key": "limit_halloween",
             "label": "Halloween Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Halloween Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Halloween Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_halloween",
@@ -32847,7 +35043,10 @@
             "key": "limit_independence",
             "label": "Independence Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Independence Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Independence Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_independence",
@@ -32878,7 +35077,10 @@
             "key": "limit_labor",
             "label": "Labor Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Labor Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Labor Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_labor",
@@ -32909,7 +35111,10 @@
             "key": "limit_lgbtq",
             "label": "LGBTQ Month Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the LGBTQ Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the LGBTQ Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_lgbtq",
@@ -32940,7 +35145,10 @@
             "key": "limit_memorial",
             "label": "Memorial Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Memorial Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Memorial Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_memorial",
@@ -32971,7 +35179,10 @@
             "key": "limit_mother",
             "label": "Mother's Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Mother's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Mother's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_mother",
@@ -33002,7 +35213,10 @@
             "key": "limit_latinx",
             "label": "National Hispanic Heritage Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the National Hispanic Heritage Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the National Hispanic Heritage Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_latinx",
@@ -33033,7 +35247,10 @@
             "key": "limit_years",
             "label": "New Year's Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the New Year's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the New Year's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_years",
@@ -33064,7 +35281,10 @@
             "key": "limit_patrick",
             "label": "St. Patrick's Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the St. Patrick's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the St. Patrick's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_patrick",
@@ -33095,7 +35315,10 @@
             "key": "limit_thanksgiving",
             "label": "Thanksgiving Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Thanksgiving Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Thanksgiving Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_thanksgiving",
@@ -33126,7 +35349,10 @@
             "key": "limit_valentine",
             "label": "Valentine's Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Valentine's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Valentine's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_valentine",
@@ -33157,7 +35383,10 @@
             "key": "limit_veteran",
             "label": "Veteran's Day Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Veteran's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Veteran's Day Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_veteran",
@@ -33188,7 +35417,10 @@
             "key": "limit_women",
             "label": "Women's History Month Movies Limit",
             "type": "text_input",
-            "tooltip": "Changes the Builder Limit of the Women's History Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value."
+            "tooltip": "Changes the Builder Limit of the Women's History Month Movies collection. Valid values are numbers greater than 0. Leave blank to inherit the family Limit value.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "radarr_add_missing_women",
@@ -33214,6 +35446,50 @@
             "type": "string_list",
             "tooltip": "Exclude specific seasonal collections from these collections.",
             "placeholder": "Add seasonal key (e.g. halloween)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
+          },
+          {
+            "key": "sync_mode",
+            "label": "Sync Mode",
+            "type": "select",
+            "tooltip": "Changes the sync_mode for all collections in a Defaults File.<br><br> Default is <b>Sync</b> ",
+            "default": "sync",
+            "options": [
+              {
+                "value": "append",
+                "label": "Append"
+              },
+              {
+                "value": "sync",
+                "label": "Sync"
+              }
+            ]
+          },
+          {
+            "key": "cache_builders",
+            "label": "Cache Builders",
+            "type": "text_input",
+            "tooltip": "Changes the Builder Cache for all collections in a Defaults File.<br><br>Allowed values: number 0 or greater.",
+            "default": 1,
+            "input_type": "number",
+            "min": 0,
+            "step": 1
           },
           {
             "key": "collection_mode",
@@ -34202,7 +36478,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "10",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -34283,6 +36562,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -34691,7 +36987,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "100",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -34706,6 +37005,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific decades from these collections.",
             "placeholder": "Add decade key (e.g. 2020)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
@@ -35114,7 +37430,10 @@
             "label": "Limit",
             "type": "text_input",
             "default": "100",
-            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0."
+            "tooltip": "Changes the Builder Limit for all collections in this Defaults File. Valid values are numbers greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
           },
           {
             "key": "use_separator",
@@ -35129,6 +37448,23 @@
             "type": "string_list",
             "tooltip": "Exclude specific decades from these collections.",
             "placeholder": "Add decade key (e.g. 2020)"
+          },
+          {
+            "key": "minimum_items",
+            "label": "Minimum Items",
+            "type": "text_input",
+            "tooltip": "Changes the minimum_items for all collections in a Defaults File.<br><br>Allowed values: number greater than 0.",
+            "input_type": "number",
+            "min": 1,
+            "step": 1
+          },
+          {
+            "key": "ignore_imdb_ids",
+            "label": "Ignore IMDb IDs",
+            "type": "string_list",
+            "tooltip": "Set a list of IMDb IDs to ignore in this Defaults File.<br><br>Each entry must look like <code>tt1234567</code>. Plex lookup is advisory and only checks the active library.",
+            "placeholder": "Add IMDb ID (e.g. tt1234567)",
+            "validation_preset": "imdb_id_plex"
           },
           {
             "key": "collection_mode",
