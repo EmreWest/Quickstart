@@ -2712,6 +2712,14 @@ document.addEventListener('DOMContentLoaded', function () {
           ? { valid: true }
           : { valid: false, message: 'Enter a numeric TMDb collection ID like 131292.' }
       },
+      numeric_id: {
+        duplicateInsensitive: true,
+        normalize: value => value,
+        lookupService: 'tmdb',
+        validate: value => /^\d+$/.test(value)
+          ? { valid: true }
+          : { valid: false, message: 'Enter a numeric ID like 603 or 1399.' }
+      },
       imdb_id_plex: {
         duplicateInsensitive: true,
         normalize: value => value.toLowerCase(),
@@ -2972,7 +2980,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return
           }
           target.classList.remove('d-none')
-          if (state.valid && state.verified) {
+          if (state.level === 'warning') {
+            target.classList.add('text-warning')
+          } else if (state.valid && state.verified) {
             target.classList.add('text-success')
           } else if (state.verified) {
             target.classList.add('text-danger')
@@ -3094,13 +3104,15 @@ document.addEventListener('DOMContentLoaded', function () {
                   verified: false,
                   message: 'Checking TMDb collection title...'
                 })
-                lookupTemplateStringValue(presetName, item.value).then(result => {
+                lookupTemplateStringValue(presetName, item.value, { libraryName, mediaType }).then(result => {
                   if (!lookupMeta.isConnected) return
                   if (result.valid && result.verified && result.label) {
+                    const successMessage = result.message || `TMDb: ${result.label}`
                     setLookupState(lookupMeta, {
                       valid: true,
                       verified: true,
-                      message: `TMDb: ${result.label}`
+                      level: result.level,
+                      message: successMessage
                     })
                     return
                   }
@@ -3133,10 +3145,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 lookupTemplateStringValue(presetName, item.value, { libraryName, mediaType }).then(result => {
                   if (!lookupMeta.isConnected) return
                   if (result.valid && result.verified && result.label) {
+                    const successMessage = result.message || `Plex: ${result.label}`
                     setLookupState(lookupMeta, {
                       valid: true,
                       verified: true,
-                      message: `Plex: ${result.label}`
+                      level: result.level,
+                      message: successMessage
                     })
                     return
                   }

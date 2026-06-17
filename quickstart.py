@@ -9763,6 +9763,167 @@ def _get_active_tmdb_api_key():
     return str(api_key).strip()
 
 
+def _lookup_tmdb_by_imdb_id(imdb_id, media_type=""):
+    api_key = _get_active_tmdb_api_key()
+    if not api_key:
+        return {"valid": False, "verified": False, "message": "TMDb is not configured for the active config."}
+
+    try:
+        response = requests.get(
+            f"https://api.themoviedb.org/3/find/{imdb_id}",
+            params={"api_key": api_key, "external_source": "imdb_id"},
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        return {"valid": False, "verified": False, "message": f"TMDb lookup failed: {exc}."}
+
+    if response.status_code in {401, 403}:
+        return {"valid": False, "verified": False, "message": "TMDb lookup could not be verified with the configured API key."}
+
+    if response.status_code == 404:
+        return {"valid": False, "verified": True, "message": "TMDb did not find a matching IMDb ID."}
+
+    if response.status_code != 200:
+        return {"valid": False, "verified": False, "message": f"TMDb lookup failed with status {response.status_code}."}
+
+    payload = response.json() if response.content else {}
+    movie_results = payload.get("movie_results") if isinstance(payload.get("movie_results"), list) else []
+    tv_results = payload.get("tv_results") if isinstance(payload.get("tv_results"), list) else []
+
+    preferred_media_type = str(media_type or "").strip().lower()
+    ordered_results = []
+    if preferred_media_type == "movie":
+        ordered_results.extend(("movie", item) for item in movie_results)
+        ordered_results.extend(("show", item) for item in tv_results)
+    elif preferred_media_type == "show":
+        ordered_results.extend(("show", item) for item in tv_results)
+        ordered_results.extend(("movie", item) for item in movie_results)
+    else:
+        ordered_results.extend(("movie", item) for item in movie_results)
+        ordered_results.extend(("show", item) for item in tv_results)
+
+    for result_type, item in ordered_results:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("title") or item.get("name") or "").strip()
+        if not label:
+            continue
+        tmdb_id = item.get("id")
+        tmdb_suffix = f" (TMDb {tmdb_id})" if tmdb_id not in [None, ""] else ""
+        media_label = "movie" if result_type == "movie" else "show"
+        return {
+            "valid": True,
+            "verified": True,
+            "label": label,
+            "result_type": result_type,
+            "message": f"TMDb {media_label}: {label}{tmdb_suffix}",
+        }
+
+    return {"valid": False, "verified": True, "message": "TMDb did not find a matching IMDb ID."}
+
+
+def _lookup_tmdb_external_ids(endpoint, tmdb_id, api_key):
+    if endpoint not in {"movie", "tv"} or not tmdb_id or not api_key:
+        return {}
+
+    try:
+        response = requests.get(
+            f"https://api.themoviedb.org/3/{endpoint}/{tmdb_id}/external_ids",
+            params={"api_key": api_key},
+            timeout=10,
+        )
+    except requests.RequestException:
+        return {}
+
+    if response.status_code != 200:
+        return {}
+
+    payload = response.json() if response.content else {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _lookup_tmdb_numeric_id(tmdb_id, media_type=""):
+    api_key = _get_active_tmdb_api_key()
+    if not api_key:
+        return {"valid": False, "verified": False, "message": "TMDb is not configured for the active config."}
+
+    preferred_media_type = str(media_type or "").strip().lower()
+    endpoint_order = []
+    if preferred_media_type == "movie":
+        endpoint_order = [("movie", "movie"), ("tv", "show"), ("collection", "collection"), ("person", "person")]
+    elif preferred_media_type == "show":
+        endpoint_order = [("tv", "show"), ("movie", "movie"), ("collection", "collection"), ("person", "person")]
+    else:
+        endpoint_order = [("movie", "movie"), ("tv", "show"), ("collection", "collection"), ("person", "person")]
+
+    for endpoint, result_type in endpoint_order:
+        try:
+            response = requests.get(
+                f"https://api.themoviedb.org/3/{endpoint}/{tmdb_id}",
+                params={"api_key": api_key},
+                timeout=10,
+            )
+        except requests.RequestException as exc:
+            return {"valid": False, "verified": False, "message": f"TMDb lookup failed: {exc}."}
+
+        if response.status_code in {401, 403}:
+            return {"valid": False, "verified": False, "message": "TMDb lookup could not be verified with the configured API key."}
+
+        if response.status_code == 404:
+            continue
+
+        if response.status_code != 200:
+            return {"valid": False, "verified": False, "message": f"TMDb lookup failed with status {response.status_code}."}
+
+        payload = response.json() if response.content else {}
+        label = str(payload.get("title") or payload.get("name") or "").strip()
+        if not label:
+            label = f"TMDb {result_type} {tmdb_id}"
+        external_ids = _lookup_tmdb_external_ids(endpoint, tmdb_id, api_key) if endpoint in {"movie", "tv"} else {}
+        tvdb_id = external_ids.get("tvdb_id")
+        id_suffix = f" (TMDb {tmdb_id})"
+        if tvdb_id not in [None, "", 0, "0"]:
+            id_suffix = f" (TMDb {tmdb_id}, TVDb {tvdb_id})"
+
+        return {
+            "valid": True,
+            "verified": True,
+            "label": label,
+            "result_type": result_type,
+            "tvdb_id": tvdb_id,
+            "message": f"TMDb {result_type}: {label}{id_suffix}",
+        }
+
+    return {"valid": False, "verified": True, "message": "TMDb did not find a matching numeric ID."}
+
+
+def _normalize_tmdb_library_media_type(value):
+    normalized = str(value or "").strip().lower()
+    if normalized in {"movie", "movies", "mov"}:
+        return "movie"
+    if normalized in {"show", "shows", "sho", "tv", "season", "seasons", "episode", "episodes"}:
+        return "show"
+    return normalized
+
+
+def _build_tmdb_library_type_warning(tmdb_message, tmdb_result_type, expected_media_type, value_label="ID"):
+    resolved_type = _normalize_tmdb_library_media_type(tmdb_result_type)
+    expected_type = _normalize_tmdb_library_media_type(expected_media_type)
+    if not resolved_type or expected_type not in {"movie", "show"}:
+        return ""
+    if resolved_type == expected_type:
+        return ""
+
+    library_label = "movie library" if expected_type == "movie" else "show/season/episode library"
+    readable_type = {
+        "movie": "movie",
+        "show": "show",
+        "collection": "collection",
+        "person": "person",
+    }.get(resolved_type, resolved_type)
+    return f"{tmdb_message}. This {value_label} resolves to a {readable_type}, but the active library is a {library_label}."
+
+
 @app.route("/lookup_template_string_value", methods=["POST"])
 def lookup_template_string_value():
     data = request.get_json(silent=True) or {}
@@ -9802,11 +9963,78 @@ def lookup_template_string_value():
 
         return jsonify({"valid": False, "verified": False, "message": f"TMDb lookup failed with status {response.status_code}."})
 
+    if preset == "numeric_id":
+        tmdb_result = _lookup_tmdb_numeric_id(value, media_type=media_type)
+        tmdb_label = str(tmdb_result.get("label") or "").strip()
+        tmdb_message = str(tmdb_result.get("message") or "").strip()
+        tmdb_result_type = str(tmdb_result.get("result_type") or "").strip().lower()
+        expected_media_type = str(media_type or "").strip().lower()
+
+        warning_message = _build_tmdb_library_type_warning(tmdb_message, tmdb_result_type, expected_media_type, value_label="numeric ID")
+        if tmdb_result.get("valid") and tmdb_result.get("verified") and warning_message:
+            return jsonify(
+                {
+                    "valid": True,
+                    "verified": True,
+                    "label": tmdb_label,
+                    "level": "warning",
+                    "message": warning_message,
+                }
+            )
+
+        if tmdb_result.get("valid") and tmdb_result.get("verified") and tmdb_label and library_name and tmdb_result_type in {"movie", "show"}:
+            try:
+                plex_match = helpers.find_item_by_title(library_name, tmdb_label)
+            except Exception as exc:
+                return jsonify({"valid": False, "verified": False, "message": f"Plex lookup failed: {exc}."})
+
+            if plex_match and plex_match.get("title"):
+                plex_title = str(plex_match.get("title")).strip()
+                return jsonify(
+                    {
+                        "valid": True,
+                        "verified": True,
+                        "label": plex_title,
+                        "message": f"Plex title match: {plex_title}. {tmdb_message}",
+                    }
+                )
+
+            return jsonify(
+                {
+                    "valid": True,
+                    "verified": True,
+                    "label": tmdb_label,
+                    "level": "warning",
+                    "message": f"{tmdb_message}. Plex could not confirm a match in the active library.",
+                }
+            )
+
+        return jsonify(tmdb_result)
+
     if preset == "imdb_id_plex":
         if not library_name:
             return jsonify({"valid": False, "verified": False, "message": "Active Plex library is required for IMDb lookup."})
+
+        tmdb_result = _lookup_tmdb_by_imdb_id(value, media_type=media_type)
+        tmdb_label = str(tmdb_result.get("label") or "").strip()
+        tmdb_message = str(tmdb_result.get("message") or "").strip()
+        tmdb_result_type = str(tmdb_result.get("result_type") or "").strip().lower()
+        expected_media_type = str(media_type or "").strip().lower()
+
+        warning_message = _build_tmdb_library_type_warning(tmdb_message, tmdb_result_type, expected_media_type, value_label="IMDb ID")
+        if tmdb_result.get("valid") and tmdb_result.get("verified") and warning_message:
+            return jsonify(
+                {
+                    "valid": True,
+                    "verified": True,
+                    "label": tmdb_label,
+                    "level": "warning",
+                    "message": warning_message,
+                }
+            )
+
         try:
-            result = helpers.find_item_by_imdb_id(library_name, value, media_type)
+            result = helpers.find_item_by_imdb_id(library_name, value, media_type, fallback_title=tmdb_label)
         except Exception as exc:
             return jsonify({"valid": False, "verified": False, "message": f"Plex lookup failed: {exc}."})
 
@@ -9814,11 +10042,27 @@ def lookup_template_string_value():
             title = str(result.get("title")).strip()
             return jsonify({"valid": True, "verified": True, "label": title, "message": f"Plex: {title}"})
 
+        if tmdb_result.get("valid") and tmdb_result.get("verified"):
+            if tmdb_label and tmdb_message:
+                return jsonify(
+                    {
+                        "valid": True,
+                        "verified": True,
+                        "label": tmdb_label,
+                        "level": "warning",
+                        "message": f"{tmdb_message}. Plex could not confirm a match in the active library.",
+                    }
+                )
+            return jsonify(tmdb_result)
+
+        fallback_message = "IMDb ID format is valid, but no matching item was found in the active Plex library."
+        if tmdb_message:
+            fallback_message = f"{fallback_message} {tmdb_message}"
         return jsonify(
             {
                 "valid": False,
-                "verified": False,
-                "message": "IMDb ID format is valid, but no matching item was found in the active Plex library.",
+                "verified": bool(tmdb_result.get("verified")),
+                "message": fallback_message,
             }
         )
 
