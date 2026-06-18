@@ -1160,6 +1160,64 @@ def test_build_libraries_section_preserves_chart_builder_size_template_variables
     assert content_rating_us_entry["template_variables"]["limit_other"] == "5"
 
 
+def test_build_libraries_section_normalizes_collection_arr_tag_lists(app):
+    from modules import output
+
+    with app.app_context():
+        libraries_section = output.build_libraries_section(
+            {"mov-library_movies-library": "Movies"},
+            {"sho-library_shows-library": "Shows"},
+            {
+                "movies": {
+                    "mov-library_movies-collection_franchise": True,
+                    "mov-library_movies-template_collection_franchise_radarr_folder": r"C:\Media\Movies",
+                    "mov-library_movies-template_collection_franchise_radarr_tag": '["4k", "favorite"]',
+                    "mov-library_movies-template_collection_franchise_item_radarr_tag": '["collected", "franchise"]',
+                }
+            },
+            {
+                "shows": {
+                    "sho-library_shows-collection_franchise": True,
+                    "sho-library_shows-template_collection_franchise_sonarr_folder": r"C:\Media\Shows",
+                    "sho-library_shows-template_collection_franchise_sonarr_monitor": "future",
+                    "sho-library_shows-template_collection_franchise_sonarr_tag": '["ongoing", "priority"]',
+                    "sho-library_shows-template_collection_franchise_item_sonarr_tag": '["watched", "tracked"]',
+                }
+            },
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+        )
+
+    movie_entry = next(
+        (entry for entry in libraries_section["libraries"]["Movies"]["collection_files"] if entry.get("default") == "franchise"),
+        None,
+    )
+    show_entry = next(
+        (entry for entry in libraries_section["libraries"]["Shows"]["collection_files"] if entry.get("default") == "franchise"),
+        None,
+    )
+
+    assert movie_entry is not None
+    assert show_entry is not None
+    assert movie_entry["template_variables"]["radarr_folder"] == r"C:\Media\Movies"
+    assert movie_entry["template_variables"]["radarr_tag"] == ["4k", "favorite"]
+    assert movie_entry["template_variables"]["item_radarr_tag"] == ["collected", "franchise"]
+    assert show_entry["template_variables"]["sonarr_folder"] == r"C:\Media\Shows"
+    assert show_entry["template_variables"]["sonarr_monitor"] == "future"
+    assert show_entry["template_variables"]["sonarr_tag"] == ["ongoing", "priority"]
+    assert show_entry["template_variables"]["item_sonarr_tag"] == ["watched", "tracked"]
+
+
 def test_build_libraries_section_emits_library_arr_overrides(app):
     from modules import output
 
@@ -1388,6 +1446,65 @@ def test_collapse_collection_data_template_vars_removes_flat_data_keys_from_all_
         assert flat_data_keys == []
         if "data" in template_variables:
             assert isinstance(template_variables["data"], dict)
+
+
+def test_normalize_collection_template_var_value_handles_dynamic_family_controls():
+    from modules import output
+
+    assert output._normalize_collection_template_var_value("append_include", '["US", "CA", "US"]') == ["US", "CA"]
+    assert output._normalize_collection_template_var_value("remove_suffix", '["Collection", " Edition ", "Collection"]') == "Collection,Edition"
+    assert output._normalize_collection_template_var_value(
+        "addons",
+        '{"Action": ["Adventure", "Adventure", "Thriller"], "Drama": "Crime, Mystery", "": ["Skip"]}',
+    ) == {
+        "Action": ["Adventure", "Thriller"],
+        "Drama": ["Crime", "Mystery"],
+    }
+    assert output._normalize_collection_template_var_value(
+        "append_addons",
+        '{"Top 250": ["IMDb Top 250"]}',
+    ) == {"Top 250": ["IMDb Top 250"]}
+
+
+def test_dynamic_family_template_var_normalization_matches_collection_export_shapes():
+    from modules import output
+
+    template_vars = {
+        "include": '["US", "CA"]',
+        "append_include": '["MX", "CA"]',
+        "addons": '{"US": ["Canada", "Mexico"], "CA": "United States"}',
+        "append_addons": '{"US": ["Brazil"]}',
+        "remove_suffix": '["Collection"]',
+    }
+
+    for list_key in ("include", "exclude", "exclude_prefix"):
+        if list_key not in template_vars:
+            continue
+        list_values = output._parse_string_list(template_vars.get(list_key))
+        if list_values:
+            template_vars[list_key] = list_values
+        else:
+            template_vars.pop(list_key, None)
+
+    for template_key in list(template_vars.keys()):
+        normalized_value = output._normalize_collection_template_var_value(template_key, template_vars.get(template_key))
+        if normalized_value is None:
+            template_vars.pop(template_key, None)
+        else:
+            template_vars[template_key] = normalized_value
+
+    assert template_vars == {
+        "include": ["US", "CA"],
+        "append_include": ["MX", "CA"],
+        "addons": {
+            "US": ["Canada", "Mexico"],
+            "CA": ["United States"],
+        },
+        "append_addons": {
+            "US": ["Brazil"],
+        },
+        "remove_suffix": "Collection",
+    }
 
 
 def test_build_config_prunes_default_horizontal_ratings_offsets(app, monkeypatch):
