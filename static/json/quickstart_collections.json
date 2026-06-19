@@ -13,8 +13,7 @@
         ],
         "readonly": true,
         "tooltip": "Please select your desired Separator style from the respective Attributes section, which will allow you to enable this Separator.",
-        "tooltip_variant": "danger",
-        "template_variables": []
+        "tooltip_variant": "danger"
       },
       {
         "id": "collection_oscars",
@@ -165,6 +164,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_best_picture",
@@ -951,6 +957,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_golden",
             "label": "Berlinale Golden Bears",
             "tooltip": "Collection of Berlin International Film Festival Golden Bear Award Winners.",
@@ -1686,6 +1699,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_best",
@@ -2425,6 +2445,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_palm",
             "label": "Cannes Golden Palm Winners",
             "tooltip": "Collection of Cannes Golden Palm Award Winners.",
@@ -3160,6 +3187,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_best",
@@ -3898,6 +3932,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_best",
@@ -4740,6 +4781,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_best",
             "label": "Emmys Best in Category Winners",
             "tooltip": "Collection of Emmys Best in Category Award Winners.",
@@ -5578,6 +5626,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_best_picture",
@@ -6467,6 +6522,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_best",
             "label": "Independent Spirit Best Feature Winners",
             "tooltip": "Collection of Independent Spirit Best Feature Award Winners.",
@@ -7202,6 +7264,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_all_time",
@@ -7940,6 +8009,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_pca",
@@ -8781,6 +8857,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_golden",
             "label": "Golden Raspberry Award Winners",
             "tooltip": "Collection of Razzie Golden Raspberry Award Winners.",
@@ -9516,6 +9599,13 @@
             "type": "string_list",
             "tooltip": "Exclude specific years from these collections.",
             "placeholder": "Add year (e.g. 2022)"
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_golden",
@@ -10255,6 +10345,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_grand",
             "label": "Grand Jury Winners",
             "tooltip": "Collection of Sundance Film Festival Grand Jury Award Winners.",
@@ -10992,6 +11089,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_best",
             "label": "Toronto People's Choice Award Winners",
             "tooltip": "Collection of Toronto International Film Festival People's Choice Award Winners.",
@@ -11721,6 +11825,13 @@
             "placeholder": "Add year (e.g. 2022)"
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_golden",
             "label": "Golden Lion Winners",
             "tooltip": "Collection of Venice Film Festival Golden Lions Award Winners.",
@@ -12323,8 +12434,7 @@
         ],
         "readonly": true,
         "tooltip": "Please select your desired Separator style from the respective Attributes section, which will allow you to enable this Separator.",
-        "tooltip_variant": "danger",
-        "template_variables": []
+        "tooltip_variant": "danger"
       },
       {
         "id": "collection_basic",
@@ -12381,6 +12491,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_episodes",
@@ -13013,6 +13130,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_popular",
@@ -13648,6 +13772,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_top",
@@ -14503,6 +14634,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_airing",
@@ -15500,6 +15638,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_collected",
             "label": "Trakt Collected",
             "tooltip": "Collection of the Most Collected Movies/Shows on Trakt.",
@@ -16492,6 +16637,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_trending_today",
             "label": "Simkl Trending Today",
             "tooltip": "Collection of Simkl's Trending Today list.",
@@ -17098,6 +17250,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_popular",
@@ -18045,6 +18204,13 @@
               "color",
               "white"
             ]
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_favorited",
@@ -19026,6 +19192,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_1001_movies",
@@ -20829,6 +21002,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_commonsense",
@@ -23360,6 +23540,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -24792,6 +24979,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -26044,6 +26238,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -26598,6 +26799,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -27155,6 +27363,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -27724,6 +27939,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -28289,6 +28511,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -28858,6 +29087,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -29425,6 +29661,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -29990,6 +30233,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -30562,6 +30812,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -31148,6 +31405,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -31731,6 +31995,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -33179,6 +33450,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -34000,6 +34278,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -35363,6 +35648,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -35913,6 +36205,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
@@ -38726,6 +39025,13 @@
             "step": 1
           },
           {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
+          },
+          {
             "key": "use_separator",
             "label": "Use Separator",
             "tooltip": "Create a separator collection before this set of collections.",
@@ -41363,6 +41669,13 @@
             "input_type": "number",
             "min": 1,
             "step": 1
+          },
+          {
+            "key": "use_all",
+            "label": "Use All Child Collections",
+            "tooltip": "Set the default on/off state for all child collections in this Defaults File. Individual child toggles override this setting: if Use All is on and a specific child is off, that child stays off; if Use All is off and a specific child is on, that child stays on.",
+            "type": "toggle",
+            "default": true
           },
           {
             "key": "use_separator",
