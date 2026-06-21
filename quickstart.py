@@ -184,6 +184,15 @@ VALIDATION_REASON_LABELS = {
     "account_locked": "Account locked",
     "validation_error": "Validation error",
 }
+SETTINGS_AUTO_SORT_HUBS_VALUES = {
+    "sort_title",
+    "sort_title.desc",
+    "alpha",
+    "alpha.desc",
+    "configured",
+    "configured.desc",
+    "random",
+}
 
 
 def _copy_background_job(job):
@@ -509,6 +518,18 @@ QS_FINAL_VALIDATION_TTL_HOURS = 12
 
 def utc_now_iso():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _normalize_auto_sort_hubs_value(value):
+    text = str(value or "").strip()
+    return text or None
+
+
+def _is_valid_auto_sort_hubs_value(value):
+    normalized = _normalize_auto_sort_hubs_value(value)
+    if normalized is None:
+        return True
+    return normalized in SETTINGS_AUTO_SORT_HUBS_VALUES
 
 
 def apply_validation_metadata(stored_data, status, reason=None, details=None, updated_at=None):
@@ -5334,7 +5355,7 @@ def generate_preview():
 
     # Lazy-load overlay metadata so we can honor JSON-defined URLs (e.g., edition overlays)
     if not hasattr(generate_preview, "_overlay_meta"):
-        overlay_cfg = helpers.load_quickstart_config("quickstart_overlays.json") or []
+        overlay_cfg = helpers.load_quickstart_overlay_config() or []
         meta = {}
         for group in overlay_cfg:
             for ov in group.get("overlays", []):
@@ -7800,6 +7821,8 @@ def step(name):
                 )
                 if normalization_errors:
                     validation_errors += normalization_errors
+        elif save_source_name == "settings" and not _is_valid_auto_sort_hubs_value(request.form.get("auto_sort_hubs")):
+            validation_errors.append("auto_sort_hubs must be one of: sort_title, sort_title.desc, alpha, alpha.desc, configured, configured.desc, random")
         if validation_errors:
             save_error = "Invalid values: " + " ".join(validation_errors)
         else:
@@ -8178,54 +8201,13 @@ def step(name):
         settings = persistence.retrieve_settings(section)
         service_validations[key] = helpers.booler(settings.get("validated", False))
 
-    def add_offset_vars(config):  # noqa: ANN001
-        """
-        Ensure each overlay exposes positional offsets with sensible defaults.
-        """
-        for group in config or []:
-            overlays = group.get("overlays", [])
-            for ov in overlays:
-                tv = ov.get("template_variables")
-                if tv is None:
-                    tv = {}
-                    ov["template_variables"] = tv
-                elif not isinstance(tv, dict):
-                    # leave lists (legacy) untouched
-                    continue
-                offsets = ov.get("default_offsets", {}) if isinstance(ov.get("default_offsets"), dict) else {}
-                # Respect initial_* overrides (used for YAML naming) but surface as horizontal/vertical inputs
-                if "initial_horizontal_offset" in tv and isinstance(tv["initial_horizontal_offset"], dict):
-                    offsets["horizontal"] = tv["initial_horizontal_offset"].get("default", offsets.get("horizontal", 0))
-                if "initial_vertical_offset" in tv and isinstance(tv["initial_vertical_offset"], dict):
-                    offsets["vertical"] = tv["initial_vertical_offset"].get("default", offsets.get("vertical", 0))
-                h_def = offsets.get("horizontal", 0)
-                v_def = offsets.get("vertical", 0)
-                # Only add if not already present
-                tv.setdefault(
-                    "horizontal_offset",
-                    {
-                        "input_type": "number",
-                        "default": h_def,
-                        "label": "Horizontal Offset",
-                    },
-                )
-                tv.setdefault(
-                    "vertical_offset",
-                    {
-                        "input_type": "number",
-                        "default": v_def,
-                        "label": "Vertical Offset",
-                    },
-                )
-
     if needs_library_payload:
         helpers.ts_log(f"Loading attribute_config...", level="TIMING")
         attribute_config = helpers.load_quickstart_config("quickstart_attributes.json")
         helpers.ts_log(f"Loading collection_config...", level="TIMING")
         collection_config = helpers.load_quickstart_config("quickstart_collections.json")
         helpers.ts_log(f"Loading overlay_config...", level="TIMING")
-        overlay_config = helpers.load_quickstart_config("quickstart_overlays.json")
-        add_offset_vars(overlay_config)
+        overlay_config = helpers.load_quickstart_overlay_config()
         helpers.ts_log(f"Loading preview image data...", level="TIMING")
         image_data = _build_preview_image_data()
         overlay_fonts = list_overlay_fonts()
@@ -8667,7 +8649,7 @@ def library_fragment(library_id):
 
     attribute_config = helpers.load_quickstart_config("quickstart_attributes.json")
     collection_config = helpers.load_quickstart_config("quickstart_collections.json")
-    overlay_config = helpers.load_quickstart_config("quickstart_overlays.json")
+    overlay_config = helpers.load_quickstart_overlay_config()
 
     legacy_playlist_libraries = _migrate_legacy_playlist_libraries_to_library_toggles(movie_libraries, show_libraries)
     data = persistence.retrieve_settings("025-libraries")
@@ -10525,6 +10507,9 @@ def validate_all_services():
         ignore_imdb_ids_values = _parse_optional_id_list(settings_section.get("ignore_imdb_ids"))
         if any(not re.match(r"^tt\d{7,8}$", item, re.IGNORECASE) for item in ignore_imdb_ids_values):
             invalid_fields.append("ignore_imdb_ids")
+
+        if not _is_valid_auto_sort_hubs_value(settings_section.get("auto_sort_hubs")):
+            invalid_fields.append("auto_sort_hubs")
 
         check_regex("custom_repo", r"^(None|https?:\/\/[\da-z.-]+\.[a-z.]{2,6}([/\w.-]*)*\/?)$", flags=re.IGNORECASE, allow_blank=True)
 
