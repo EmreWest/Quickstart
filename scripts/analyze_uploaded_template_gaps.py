@@ -74,6 +74,7 @@ DEFAULT_EXCLUDED_DIR_NAMES = {
     "obj",
     "output",
     "packages",
+    "parsed_configs",
     "photos",
     "pictures",
     "site-packages",
@@ -677,8 +678,15 @@ def resolve_default_paths(alias: str, kind: str, kometa_defaults: Path) -> list[
         if path.exists():
             support_files.append(path)
         return support_files
-    matches = sorted(kometa_defaults.rglob(f"{alias}.yml"))
-    support_files.extend([p for p in matches if p.is_file()])
+    if kind == "collection":
+        collection_dirs = ("award", "both", "chart", "movie", "show")
+        for dirname in collection_dirs:
+            path = kometa_defaults / dirname / f"{alias}.yml"
+            if path.exists():
+                support_files.append(path)
+    else:
+        matches = sorted(kometa_defaults.rglob(f"{alias}.yml"))
+        support_files.extend([p for p in matches if p.is_file()])
     deduped: list[Path] = []
     seen: set[Path] = set()
     for path in support_files:
@@ -1785,9 +1793,16 @@ def prefilter_yaml_files(
             continue
         if encoding_used not in {"utf-8", "utf-8-sig"}:
             stats["decode_fallbacks"] += 1
-        contains_relevant_yaml = (
-            "template_variables" in raw_text or looks_like_kometa_config_text(raw_text) or any(f"{marker}:" in raw_text for marker in EXTERNAL_TOP_LEVEL_MARKERS)
-        )
+        has_config_markers = looks_like_kometa_config_text(raw_text)
+        has_external_markers = any(f"{marker}:" in raw_text for marker in EXTERNAL_TOP_LEVEL_MARKERS)
+        has_template_variables = "template_variables" in raw_text
+
+        if yaml_type_focus == "config":
+            contains_relevant_yaml = has_config_markers
+        elif yaml_type_focus == "all":
+            contains_relevant_yaml = has_template_variables or has_config_markers or has_external_markers
+        else:
+            contains_relevant_yaml = has_template_variables or has_external_markers
         if not contains_relevant_yaml:
             if is_probable_non_config_artifact(path):
                 skip_record = {
@@ -1980,7 +1995,7 @@ def scan_uploaded_configs(
                 checkpoint_callback(idx, total_files)
             continue
         file_findings = extract_findings_from_data(data, path)
-        file_importer_findings = extract_importer_findings_from_data(data, path)
+        file_importer_findings = extract_importer_findings_from_data(data, path) if document_type == "config" else []
         findings.extend(file_findings)
         importer_findings.extend(file_importer_findings)
         parsed_count += 1
@@ -2123,6 +2138,8 @@ QUICKSTART_RECOMMENDATION_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("library", "overlay_path"): "legacy_library_path_key_not_recommended",
     ("library", "reapply_overlays"): "valid_but_not_recommended_for_quickstart",
     ("library", "library_type"): "internal_importer_or_analyzer_metadata",
+    ("library", "sort_by"): "library_template_variable_not_documented_for_quickstart",
+    ("library", "exclude"): "library_template_variable_not_documented_for_quickstart",
 }
 
 
@@ -2134,6 +2151,8 @@ def get_quickstart_recommendation_exclusion(row: dict[str, Any]) -> str | None:
 
 MERGED_FIX_QUEUE_EXCLUSIONS: dict[tuple[str, str], str] = {
     ("library", "library_type"): "internal_importer_or_analyzer_metadata",
+    ("library", "sort_by"): "library_template_variable_not_documented_for_quickstart",
+    ("library", "exclude"): "library_template_variable_not_documented_for_quickstart",
 }
 
 
@@ -2144,7 +2163,7 @@ def get_merged_fix_queue_exclusion(row: dict[str, Any]) -> str | None:
 
 
 def accumulate_quickstart_recommendation_summary(summary: dict[tuple[str, str | None, str], dict[str, Any]], row: dict[str, Any]) -> None:
-    if not row.get("name_verified") or row.get("quickstart_declared"):
+    if not row.get("name_verified") or row.get("supported_in_quickstart"):
         return
     if get_quickstart_recommendation_exclusion(row):
         return
@@ -2161,7 +2180,7 @@ def build_quickstart_recommendation_summary(rows: list[dict[str, Any]]) -> dict[
 def build_quickstart_recommendation_exclusion_summary(rows: list[dict[str, Any]]) -> dict[tuple[str, str | None, str], dict[str, Any]]:
     summary: dict[tuple[str, str | None, str], dict[str, Any]] = {}
     for row in rows:
-        if not row.get("name_verified") or row.get("quickstart_declared"):
+        if not row.get("name_verified") or row.get("supported_in_quickstart"):
             continue
         exclusion_reason = get_quickstart_recommendation_exclusion(row)
         if not exclusion_reason:
@@ -2298,7 +2317,7 @@ def build_merged_fix_queue(
             bucket["validation_levels"].add(str(item.get("validation_level")))
         if item.get("kometa_declared") and not item.get("schema_declared"):
             bucket["needs_schema_support"] = True
-        if item.get("kometa_declared") and not item.get("quickstart_declared") and not bucket["quickstart_exclusion_reason"]:
+        if item.get("kometa_declared") and not item.get("supported_in_quickstart") and not bucket["quickstart_exclusion_reason"]:
             bucket["needs_quickstart_support"] = True
 
     for item in importer_rows:
