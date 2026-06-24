@@ -2,6 +2,7 @@ import hashlib
 import os
 import time
 from io import BytesIO
+from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
@@ -9,9 +10,116 @@ from flask import Blueprint, abort, has_request_context, jsonify, request, send_
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 from werkzeug.utils import secure_filename
 
-from modules import assets, helpers, url_validation
+from modules import assets, helpers, url_validation, validations
 
 bp = Blueprint("asset_routes", __name__)
+
+OVERLAY_PREVIEW_ROOT = Path(__file__).resolve().parent.parent / "static" / "images" / "overlay-defaults"
+
+
+def _overlay_preview_filename(badge_key, family=None):
+    normalized_family = str(family or "").strip().lower()
+    normalized_key = str(badge_key or "").strip()
+    if normalized_family != "audio_codec":
+        normalized_key = normalized_key.replace("_", "")
+    return f"{normalized_key}.png" if normalized_key else ""
+
+
+def _overlay_preview_mimetype_from_format(image_format):
+    fmt = str(image_format or "").strip().lower()
+    if fmt == "webp":
+        return "image/webp"
+    if fmt in {"jpg", "jpeg"}:
+        return "image/jpeg"
+    return "image/png"
+
+
+def _read_overlay_preview_source_bytes(source_type, source_value):
+    normalized_type = str(source_type or "").strip().lower()
+    normalized_value = str(source_value or "").strip()
+
+    if normalized_type not in {"file", "url", "git", "repo"}:
+        raise ValueError("Invalid overlay source type.")
+    if not normalized_value:
+        raise ValueError("Missing overlay source value.")
+
+    if normalized_type == "file":
+        try:
+            resolved_path = Path(validations._resolve_managed_library_path(normalized_value)).resolve()  # noqa: SLF001
+            config_root = Path(helpers.CONFIG_DIR).resolve()
+            resolved_path.relative_to(config_root)
+        except Exception as exc:
+            raise ValueError("Unable to resolve overlay file path.") from exc
+
+        if not resolved_path.exists() or not resolved_path.is_file():
+            raise ValueError("Overlay preview file must be within managed config storage.")
+
+        return resolved_path.read_bytes(), _overlay_preview_mimetype_from_format(resolved_path.suffix.lstrip(".")), str(resolved_path)
+
+    resolved_url, resolve_error = validations._resolve_overlay_source_override_remote_url(normalized_type, normalized_value)  # noqa: SLF001
+    if resolve_error or not resolved_url:
+        raise ValueError(resolve_error or "Unable to resolve overlay preview URL.")
+
+    try:
+        response = requests.get(resolved_url, timeout=15)
+    except requests.RequestException as exc:
+        raise ValueError(f"Unable to fetch overlay preview image. {exc}") from exc
+
+    if response.status_code >= 400:
+        raise ValueError(f"Overlay preview URL returned HTTP {response.status_code} {response.reason}.")
+
+    content_type = response.headers.get("Content-Type") or "application/octet-stream"
+    return response.content, content_type, resolved_url
+
+
+def _load_overlay_preview_image(source_type, source_value):
+    content, _content_type, source_label = _read_overlay_preview_source_bytes(source_type, source_value)
+    try:
+        with Image.open(BytesIO(content)) as preview_img:
+            return preview_img.convert("RGBA"), source_label
+    except Exception as exc:
+        raise ValueError(f"Unable to read overlay preview image from {source_label}. {exc}") from exc
+
+
+def _load_bundled_overlay_preview_image(family, badge_key, variant=None):
+    normalized_family = str(family or "").strip().lower()
+    filename = _overlay_preview_filename(badge_key, normalized_family)
+    normalized_variant = str(variant or "").strip().lower()
+    if normalized_family not in {"resolution", "edition", "audio_codec"} or not filename:
+        raise ValueError("Invalid bundled overlay preview request.")
+
+    image_root = OVERLAY_PREVIEW_ROOT / normalized_family
+    if normalized_family == "audio_codec":
+        normalized_variant = normalized_variant if normalized_variant in {"compact", "standard"} else "compact"
+        image_root = image_root / normalized_variant
+
+    image_path = image_root.resolve() / filename
+    image_path = image_path.resolve()
+    try:
+        image_path.relative_to(OVERLAY_PREVIEW_ROOT.resolve())
+    except Exception as exc:
+        raise ValueError("Invalid bundled overlay preview path.") from exc
+
+    if not image_path.exists() or not image_path.is_file():
+        raise ValueError(f"Bundled overlay preview image not found for {normalized_family}:{badge_key}.")
+
+    try:
+        with Image.open(image_path) as preview_img:
+            return preview_img.convert("RGBA"), str(image_path)
+    except Exception as exc:
+        raise ValueError(f"Unable to read bundled overlay preview image {image_path.name}. {exc}") from exc
+
+
+def _load_render_preview_image(payload, family):
+    family_payload = payload.get(family) if isinstance(payload.get(family), dict) else {}
+    source_type = str(family_payload.get("source_type") or "").strip().lower()
+    source_value = str(family_payload.get("source_value") or "").strip()
+    badge_key = str(family_payload.get("badge_key") or "").strip()
+    variant = str(family_payload.get("variant") or "").strip()
+
+    if source_type and source_value:
+        return _load_overlay_preview_image(source_type, source_value)
+    return _load_bundled_overlay_preview_image(family, badge_key, variant)
 
 
 @bp.route("/upload_library_image", methods=["POST"])
@@ -266,6 +374,81 @@ def list_uploaded_images():
         return jsonify({"status": "error", "message": "Invalid image type"}), 400
 
     return jsonify({"status": "success", "images": assets.list_preview_images_for_type(image_type)})
+
+
+@bp.route("/overlay-source-preview", methods=["GET"])
+def overlay_source_preview():
+    source_type = str(request.args.get("source_type") or "").strip().lower()
+    source_value = str(request.args.get("source_value") or "").strip()
+
+    try:
+        content, content_type, resolved_location = _read_overlay_preview_source_bytes(source_type, source_value)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    if source_type == "file":
+        return send_file(Path(resolved_location))
+
+    return send_file(BytesIO(content), mimetype=content_type)
+
+
+@bp.route("/overlay-render-preview", methods=["POST"])
+def overlay_render_preview():
+    data = request.get_json(silent=True) or {}
+    overlay_id = str(data.get("overlay_id") or "").strip()
+
+    if overlay_id not in {"overlay_resolution", "overlay_audio_codec"}:
+        return jsonify({"status": "error", "message": "Unsupported overlay render preview request."}), 400
+
+    if overlay_id == "overlay_audio_codec":
+        try:
+            rendered, _ = _load_render_preview_image(data, "audio_codec")
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
+
+        image_bytes = BytesIO()
+        rendered.save(image_bytes, format="PNG")
+        image_bytes.seek(0)
+        return send_file(image_bytes, mimetype="image/png")
+
+    use_resolution = bool(data.get("use_resolution", True))
+    use_edition = bool(data.get("use_edition", True))
+    spacing = data.get("spacing", 15)
+    try:
+        spacing = max(0, int(spacing))
+    except (TypeError, ValueError):
+        spacing = 15
+
+    if not use_resolution and not use_edition:
+        return jsonify({"status": "error", "message": "No resolution or edition badge is enabled for preview."}), 400
+
+    try:
+        resolution_img = None
+        edition_img = None
+        if use_resolution:
+            resolution_img, _ = _load_render_preview_image(data, "resolution")
+        if use_edition:
+            edition_img, _ = _load_render_preview_image(data, "edition")
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    if resolution_img and edition_img:
+        canvas_width = max(resolution_img.width, edition_img.width)
+        canvas_height = resolution_img.height + spacing + edition_img.height
+        rendered = Image.new("RGBA", (canvas_width, canvas_height), (255, 255, 255, 0))
+        rendered.paste(resolution_img, ((canvas_width - resolution_img.width) // 2, 0), resolution_img)
+        rendered.paste(edition_img, ((canvas_width - edition_img.width) // 2, resolution_img.height + spacing), edition_img)
+    elif resolution_img:
+        rendered = resolution_img
+    elif edition_img:
+        rendered = edition_img
+    else:
+        return jsonify({"status": "error", "message": "Unable to build overlay render preview."}), 400
+
+    image_bytes = BytesIO()
+    rendered.save(image_bytes, format="PNG")
+    image_bytes.seek(0)
+    return send_file(image_bytes, mimetype="image/png")
 
 
 @bp.route("/generate_preview", methods=["POST"])
