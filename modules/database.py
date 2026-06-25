@@ -191,6 +191,7 @@ def reset_data(name, section=None):
     with sqlite3.connect(get_database_path(), detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES) as connection:
         connection.row_factory = sqlite3.Row
         with closing(connection.cursor()) as cursor:
+            cursor.execute(persisted_section_table_create())  # ensure table exists before DELETE
             sql = "DELETE from section_data where name == ?"
             if section:
                 cursor.execute(f"{sql} AND section == ?", (name, section))
