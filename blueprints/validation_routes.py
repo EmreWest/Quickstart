@@ -6,6 +6,30 @@ from modules import database, helpers, persistence, url_validation, validations
 bp = Blueprint("validation_routes", __name__)
 
 
+def _unpack_validation_result(result):
+    """Normalise a validator return value into ``(flask_response, status_code)``.
+
+    Validator functions in ``modules.validations`` may return either:
+
+    * ``jsonify(payload)`` -- a plain Flask ``Response`` (the common case).
+    * ``(jsonify(payload), status_code)`` -- a tuple (used when the validator
+      wants to signal a specific HTTP status, e.g. 400 for a bad URL).
+
+    Both are valid Flask view-return values when returned *directly*, but when
+    a route needs to *inspect* the payload first (to decide whether to re-emit
+    the body with a different status code), it must unpack consistently.
+    Without this helper, routes that call ``result.get_json()`` crash with
+    ``AttributeError: 'tuple' object has no attribute 'get_json'`` whenever
+    the underlying validator returns a tuple.
+
+    ``status_code`` defaults to 200 for plain responses so callers can always
+    use ``status_code or 400`` as the fallback error status.
+    """
+    if isinstance(result, tuple):
+        return result[0], int(result[1])
+    return result, None  # caller uses ``status_code or 400`` -- None keeps the fallback working
+
+
 @bp.route("/validate_gotify", methods=["POST"])
 def validate_gotify():
     data = request.get_json(silent=True) or {}
@@ -411,81 +435,61 @@ def validate_webhook():
 @bp.route("/validate_radarr", methods=["POST"])
 def validate_radarr():
     data = request.json
-    result = validations.validate_radarr_server(data)
-    status_code = 200
-    if isinstance(result, tuple):
-        result, status_code = result
-
+    result, status_code = _unpack_validation_result(validations.validate_radarr_server(data))
     if result.get_json().get("valid"):
         return jsonify(result.get_json())
-    else:
-        return jsonify(result.get_json()), status_code or 400
+    return jsonify(result.get_json()), status_code or 400
 
 
 @bp.route("/validate_sonarr", methods=["POST"])
 def validate_sonarr():
     data = request.json
-    result = validations.validate_sonarr_server(data)
-    status_code = 200
-    if isinstance(result, tuple):
-        result, status_code = result
-
+    result, status_code = _unpack_validation_result(validations.validate_sonarr_server(data))
     if result.get_json().get("valid"):
         return jsonify(result.get_json())
-    else:
-        return jsonify(result.get_json()), status_code or 400
+    return jsonify(result.get_json()), status_code or 400
 
 
 @bp.route("/validate_omdb", methods=["POST"])
 def validate_omdb():
     data = request.json
-    result = validations.validate_omdb_server(data)
-
+    result, status_code = _unpack_validation_result(validations.validate_omdb_server(data))
     if result.get_json().get("valid"):
         return jsonify(result.get_json())
-    else:
-        return jsonify(result.get_json()), 400
+    return jsonify(result.get_json()), status_code or 400
 
 
 @bp.route("/validate_github", methods=["POST"])
 def validate_github():
     data = request.json
-    result = validations.validate_github_server(data)
-
+    result, status_code = _unpack_validation_result(validations.validate_github_server(data))
     if result.get_json().get("valid"):
         return jsonify(result.get_json())
-    else:
-        return jsonify(result.get_json()), 400
+    return jsonify(result.get_json()), status_code or 400
 
 
 @bp.route("/validate_tmdb", methods=["POST"])
 def validate_tmdb():
     data = request.json
-    result = validations.validate_tmdb_server(data)
-
+    result, status_code = _unpack_validation_result(validations.validate_tmdb_server(data))
     if result.get_json().get("valid"):
         return jsonify(result.get_json())
-    else:
-        return jsonify(result.get_json()), 400
+    return jsonify(result.get_json()), status_code or 400
 
 
 @bp.route("/validate_mdblist", methods=["POST"])
 def validate_mdblist():
     data = request.json
-    result = validations.validate_mdblist_server(data)
-
+    result, status_code = _unpack_validation_result(validations.validate_mdblist_server(data))
     if result.get_json().get("valid"):
         return jsonify(result.get_json())
-    else:
-        return jsonify(result.get_json()), 400
+    return jsonify(result.get_json()), status_code or 400
 
 
 @bp.route("/validate_notifiarr", methods=["POST"])
 def validate_notifiarr():
     data = request.json
-    result = validations.validate_notifiarr_server(data)
-
+    result, status_code = _unpack_validation_result(validations.validate_notifiarr_server(data))
     if result.get_json().get("valid"):
         return jsonify(result.get_json())
-    else:
-        return jsonify(result.get_json()), 400
+    return jsonify(result.get_json()), status_code or 400
