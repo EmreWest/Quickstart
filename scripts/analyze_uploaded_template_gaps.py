@@ -30,7 +30,7 @@ try:
 except ImportError:
     py7zr = None
 
-CACHE_VERSION = 4
+CACHE_VERSION = 5
 CACHE_SAVE_EVERY_ITEMS = 1000
 CACHE_SAVE_EVERY_SECS = 60.0
 VERIFY_CHECKPOINT_VERSION = 2
@@ -41,6 +41,8 @@ ARCHIVE_CACHE_VERSION = 1
 ARCHIVE_CACHE_DIRNAME = "template_gap_archive_cache"
 QS_SPECIAL_LIBRARY_TEMPLATE_KEYS = {
     "placeholder_imdb_id",
+    "placeholder_tmdb_movie",
+    "placeholder_tvdb_show",
     "sep_style",
 }
 QS_SPECIAL_GLOBAL_SUPPORTED_KEYS = {
@@ -122,6 +124,34 @@ PROBABLE_ARTIFACT_PATH_PARTS = {
     "fromdownloads",
 }
 YAML_SUFFIXES = {".yml", ".yaml"}
+QUICKSTART_SAMPLE_CONFIG_FILENAMES = {
+    "prototype_config.yml",
+    "prototype_comprehensive.yml",
+    "kitchen_sink_config.yml",
+}
+QUICKSTART_SAMPLE_CONFIG_PATH_PARTS = {
+    "json-schema",
+    "quickstart-development",
+}
+LIBRARY_OVERLAY_ONLY_KEYS = {
+    "horizontal_align",
+    "vertical_align",
+    "horizontal_offset",
+    "vertical_offset",
+    "back_width",
+    "back_height",
+    "back_padding",
+    "back_radius",
+    "back_line_width",
+    "back_align",
+    "back_color",
+    "back_line_color",
+}
+INTERNAL_OVERLAY_TEMPLATE_KEYS = {
+    "final_horizontal_offset",
+    "final_vertical_offset",
+    "final_name",
+}
 
 
 def json_default(value: Any) -> Any:
@@ -221,6 +251,17 @@ def is_probable_non_config_artifact(path: Path) -> bool:
     if lower_parts.intersection(PROBABLE_ARTIFACT_PATH_PARTS) and filename.lower().startswith("parsed_"):
         return True
     return False
+
+
+def is_quickstart_sample_config(path: Path) -> bool:
+    normalized = str(path).replace("\\", "/")
+    parts = [part.lower() for part in normalized.split("/") if part]
+    if not parts:
+        return False
+    filename = parts[-1]
+    if filename not in QUICKSTART_SAMPLE_CONFIG_FILENAMES:
+        return False
+    return any(part in QUICKSTART_SAMPLE_CONFIG_PATH_PARTS for part in parts[:-1])
 
 
 def load_json(path: Path) -> Any:
@@ -494,6 +535,35 @@ def collect_qs_keys(raw: Any) -> set[str]:
     return keys
 
 
+def collect_overlay_runtime_aliases(overlay: dict[str, Any]) -> set[str]:
+    aliases: set[str] = set()
+
+    oid = overlay.get("id")
+    if oid:
+        aliases.add(str(oid).replace("overlay_", "", 1).strip().lower())
+
+    source_overrides = overlay.get("source_overrides")
+    if isinstance(source_overrides, dict):
+        fixed_key = source_overrides.get("fixed_key")
+        if isinstance(fixed_key, str) and fixed_key.strip():
+            aliases.add(fixed_key.strip().lower())
+
+    return aliases
+
+
+def collect_overlay_source_override_keys(source_overrides: Any) -> set[str]:
+    keys: set[str] = set()
+    if not isinstance(source_overrides, dict):
+        return keys
+
+    source_types = source_overrides.get("source_types")
+    if isinstance(source_types, list):
+        for source_type in source_types:
+            if isinstance(source_type, str) and source_type.strip():
+                keys.add(source_type.strip())
+    return keys
+
+
 def collect_declared_yaml_patterns(raw: Any, *, parent_key: str | None = None) -> set[str]:
     patterns: set[str] = set()
     if isinstance(raw, dict):
@@ -550,8 +620,8 @@ def build_qs_overlay_map(qs_overlays_path: Path, *, enrich_runtime_support: bool
             oid = overlay.get("id")
             if not oid:
                 continue
-            alias = str(oid).replace("overlay_", "", 1)
             keys = collect_qs_keys(overlay.get("template_variables"))
+            keys.update(collect_overlay_source_override_keys(overlay.get("source_overrides")))
 
             if enrich_runtime_support:
                 # Quickstart injects horizontal/vertical offset controls at render time
@@ -587,14 +657,20 @@ def build_qs_overlay_map(qs_overlays_path: Path, *, enrich_runtime_support: bool
             # Some Quickstart defaults intentionally reuse the same alias for
             # different media types. Merge their declared keys so later entries
             # do not erase earlier support and create false-positive gaps.
-            mapping.setdefault(alias, set()).update(keys)
+            for alias in collect_overlay_runtime_aliases(overlay):
+                mapping.setdefault(alias, set()).update(keys)
     return mapping
 
 
 def overlay_key_supported_in_quickstart(alias: str | None, key: str, qs_overlays: dict[str, set[str]]) -> bool:
-    alias_text = str(alias or "")
+    alias_text = str(alias or "").strip().lower()
     if key in qs_overlays.get(alias_text, set()):
         return True
+
+    source_override_prefixes = ("file", "url", "git", "repo")
+    for prefix in source_override_prefixes:
+        if key.startswith(f"{prefix}_") and prefix in qs_overlays.get(alias_text, set()):
+            return True
 
     # Quickstart models subtitle language flags as a dedicated overlay alias,
     # while user configs legitimately express that selection as
@@ -672,6 +748,14 @@ def resolve_default_paths(alias: str, kind: str, kometa_defaults: Path) -> list[
         path = kometa_defaults / "overlays" / f"{alias}.yml"
         if path.exists():
             support_files.append(path)
+        else:
+            alias_lower = str(alias or "").strip().lower()
+            overlays_dir = kometa_defaults / "overlays"
+            if alias_lower and overlays_dir.is_dir():
+                for candidate in overlays_dir.glob("*.yml"):
+                    if candidate.stem.strip().lower() == alias_lower:
+                        support_files.append(candidate)
+                        break
         return support_files
     if kind == "playlist":
         path = kometa_defaults / "playlist.yml"
@@ -890,6 +974,55 @@ def key_is_valid_for_default(key: str, default_files: list[Path]) -> tuple[bool,
                 matched.append(path)
                 break
     return bool(matched), matched
+
+
+@lru_cache(maxsize=None)
+def default_file_uses_dynamic_collections(path: Path) -> bool:
+    try:
+        parsed, _encoding = load_yaml(path)
+    except Exception:
+        return False
+    return isinstance(parsed, dict) and isinstance(parsed.get("dynamic_collections"), dict)
+
+
+def resolve_matched_default_file_paths(row: dict[str, Any]) -> list[Path]:
+    matched_paths = row.get("matched_default_files")
+    if not isinstance(matched_paths, (list, set, tuple)):
+        return []
+    defaults_root = ROOT / "config" / "kometa" / "defaults"
+    resolved: list[Path] = []
+    for raw_path in matched_paths:
+        if not raw_path:
+            continue
+        path = defaults_root / str(raw_path)
+        if path.is_file():
+            resolved.append(path)
+    return resolved
+
+
+def is_dynamic_collection_child_instance_key(row: dict[str, Any]) -> bool:
+    key = str(row.get("key") or "")
+    if not key:
+        return False
+    for path in resolve_matched_default_file_paths(row):
+        if not default_file_uses_dynamic_collections(path):
+            continue
+        for pattern in patterns_from_default_file(path):
+            if key == pattern or not PLACEHOLDER_RE.search(pattern):
+                continue
+            if key_matches_pattern(key, pattern):
+                return True
+    return False
+
+
+def get_structural_finding_exclusion(row: dict[str, Any]) -> str | None:
+    kind = str(row.get("kind") or "")
+    key = str(row.get("key") or "")
+    if kind == "overlay" and key in INTERNAL_OVERLAY_TEMPLATE_KEYS:
+        return "internal_overlay_finalizer_key_not_user_facing"
+    if is_dynamic_collection_child_instance_key(row):
+        return "dynamic_collection_child_instance_key_not_ranked"
+    return None
 
 
 def classify_validation_level(
@@ -1778,6 +1911,25 @@ def prefilter_yaml_files(
                 checkpoint_callback(idx, total_files)
             continue
         stats["cache_misses"] += 1
+        if yaml_type_focus == "config" and is_quickstart_sample_config(path):
+            skip_record = {
+                "file": str(path),
+                "error_type": "IgnoredSampleConfig",
+                "reason": "known Quickstart schema sample config",
+                "detail": f"IgnoredSampleConfig: {path.name}",
+                "stage": "prefilter",
+                "noise": True,
+                "noise_reason": "quickstart_sample_config",
+            }
+            skipped_files.append(skip_record)
+            stats["artifact_skips"] += 1
+            if isinstance(files_cache, dict):
+                files_cache[cache_key] = {"signature": signature, "prefilter_skip": skip_record, "contains_relevant_yaml": False}
+            if progress_callback:
+                progress_callback(idx, total_files, len(candidate_files), len(skipped_files), path)
+            if checkpoint_callback:
+                checkpoint_callback(idx, total_files)
+            continue
         try:
             raw_text, encoding_used = read_text_with_fallbacks(path)
         except Exception as exc:
@@ -2149,8 +2301,13 @@ QUICKSTART_RECOMMENDATION_EXCLUSIONS: dict[tuple[str, str], str] = {
 
 
 def get_quickstart_recommendation_exclusion(row: dict[str, Any]) -> str | None:
+    structural_reason = get_structural_finding_exclusion(row)
+    if structural_reason:
+        return structural_reason
     kind = str(row.get("kind") or "")
     key = str(row.get("key") or "")
+    if kind == "library" and key in LIBRARY_OVERLAY_ONLY_KEYS:
+        return "overlay_rendering_key_misclassified_at_library_scope"
     return QUICKSTART_RECOMMENDATION_EXCLUSIONS.get((kind, key))
 
 
@@ -2162,6 +2319,9 @@ MERGED_FIX_QUEUE_EXCLUSIONS: dict[tuple[str, str], str] = {
 
 
 def get_merged_fix_queue_exclusion(row: dict[str, Any]) -> str | None:
+    structural_reason = get_structural_finding_exclusion(row)
+    if structural_reason:
+        return structural_reason
     kind = str(row.get("kind") or "")
     key = str(row.get("key") or "")
     return MERGED_FIX_QUEUE_EXCLUSIONS.get((kind, key))
@@ -2305,7 +2465,7 @@ def build_merged_fix_queue(
                 "needs_schema_support": False,
                 "needs_quickstart_support": False,
                 "needs_importer_support": False,
-                "quickstart_exclusion_reason": QUICKSTART_RECOMMENDATION_EXCLUSIONS.get((kind, key)),
+                "quickstart_exclusion_reason": None,
             },
         )
 
@@ -2318,6 +2478,8 @@ def build_merged_fix_queue(
         bucket["verified_files"].update(str(path) for path in item.get("files", []) if path)
         bucket["libraries"].update(str(lib) for lib in item.get("libraries", []) if lib)
         bucket["matched_default_files"].update(str(path) for path in item.get("matched_default_files", []) if path)
+        if not bucket["quickstart_exclusion_reason"]:
+            bucket["quickstart_exclusion_reason"] = get_quickstart_recommendation_exclusion(item)
         if item.get("validation_level"):
             bucket["validation_levels"].add(str(item.get("validation_level")))
         if item.get("kometa_declared") and not item.get("schema_declared"):
@@ -2340,7 +2502,8 @@ def build_merged_fix_queue(
         for reason in item.get("reasons", []):
             if reason:
                 bucket["importer_reasons"].add(str(reason))
-        if item.get("import_status") != "mapped" and not bucket["quickstart_exclusion_reason"]:
+        has_verified_support_signal = bucket["verified_occurrences"] > 0 or bool(bucket["matched_default_files"])
+        if item.get("import_status") != "mapped" and has_verified_support_signal and not bucket["quickstart_exclusion_reason"]:
             bucket["needs_importer_support"] = True
 
     ranked: list[dict[str, Any]] = []
