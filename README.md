@@ -14,6 +14,18 @@
 [![Sponsor or Donate](https://img.shields.io/badge/-Sponsor%2FDonate-blueviolet?style=plastic)](https://github.com/sponsors/meisnate12)
 <!--shields-end-->
 <!--body1-start-->
+## What Is Different in This Fork
+
+This fork keeps the original Kometa Quickstart workflow, but adds support for the Emby-enabled Kometa branch work from `tommargar/Kometa`:
+
+- **Emby config preservation:** Imported or manually saved top-level `emby:` config data is retained instead of being dropped during validation or final config generation.
+- **Emby setup page:** Quickstart includes a Web GUI page for Emby URL, API key, user ID, overlay destination folder, timeout, database cache, and SSL verification.
+- **Emby server mode:** Settings now include `server_type`, so generated configs can emit `settings.server_type: emby`.
+- **Emby overlay settings:** Settings expose Emby-related overlay options such as `overlay_refresh_emby_items` and support Emby-friendly overlay artwork output like `png`.
+- **Validation/readiness changes:** When `server_type` is set to `emby`, Quickstart treats Emby credentials as the required media server setup instead of Plex.
+
+The upstream Quickstart project remains Plex-first. This fork is intended for testing and using Kometa configurations that target Emby support.
+
 ## Welcome to Kometa Quickstart
 
 ## ✨ Features
