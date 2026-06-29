@@ -477,11 +477,17 @@ def get_dummy_data(target):
 
 def check_minimum_settings():
     plex_valid, plex_user_entered = retrieve_status("plex")
+    emby_valid, emby_user_entered = retrieve_status("emby")
     tmdb_valid, tmdb_user_entered = retrieve_status("tmdb")
     libs_valid, libs_user_entered = retrieve_status("libraries")
     sett_valid, sett_user_entered = retrieve_status("settings")
 
-    return plex_valid, tmdb_valid, libs_valid, sett_valid
+    settings = retrieve_settings("150-settings") or {}
+    settings_section = settings.get("settings", {}) if isinstance(settings, dict) else {}
+    server_type = str(settings_section.get("server_type") or "plex").strip().lower()
+    server_valid = emby_valid if server_type == "emby" else plex_valid
+
+    return server_valid, tmdb_valid, libs_valid, sett_valid
 
 
 def flush_session_storage(name):

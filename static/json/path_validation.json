@@ -101,6 +101,16 @@
       }
     },
     {
+      "id": "emby_overlay_destination_folder",
+      "label": "Emby Overlay Destination Folder",
+      "mode": "output_dir",
+      "allow_relative": false,
+      "must_exist": false,
+      "ui": {
+        "hint_docker": "Running in Docker? Use the Kometa container path for the shared overlay volume."
+      }
+    },
+    {
       "id": "imagemaid_plex_path",
       "label": "ImageMaid Plex Path",
       "mode": "output_dir",

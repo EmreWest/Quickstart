@@ -538,6 +538,26 @@ def validate_plex_server(data):
     return jsonify(payload)
 
 
+def validate_emby_server(data):
+    emby_url = data.get("emby_url")
+    emby_api_key = data.get("emby_api_key")
+    emby_user_id = data.get("emby_user_id")
+
+    ok, msg = _validate_service_url(emby_url, "Emby", allow_local=True)
+    if not ok:
+        return jsonify({"valid": False, "error": msg}), 400
+
+    missing = []
+    if not str(emby_api_key or "").strip():
+        missing.append("API key")
+    if not str(emby_user_id or "").strip():
+        missing.append("User ID")
+    if missing:
+        return jsonify({"valid": False, "error": f"Emby {' and '.join(missing)} required."}), 400
+
+    return jsonify({"valid": True, "validated": True})
+
+
 def validate_tautulli_server(data):
     tautulli_url = data.get("tautulli_url")
     tautulli_apikey = data.get("tautulli_apikey")

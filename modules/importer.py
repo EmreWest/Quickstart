@@ -7,6 +7,7 @@ from ruamel.yaml import YAML
 from modules import helpers
 
 SIMPLE_SECTIONS = {
+    "emby",
     "plex",
     "tmdb",
     "omdb",

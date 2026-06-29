@@ -2699,6 +2699,7 @@ def build_config(header_style="standard", config_name=None):
                 if dump_name in [
                     "settings",
                     "webhooks",
+                    "emby",
                     "plex",
                     "tmdb",
                     "tautulli",
@@ -2728,9 +2729,16 @@ def build_config(header_style="standard", config_name=None):
             section = cleaned_data.get("anidb")
             if isinstance(section, dict):
                 section.pop("enable", None)
+        if dump_name == "emby":
+            section = cleaned_data.get("emby")
+            if isinstance(section, dict):
+                for key in list(section.keys()):
+                    if section.get(key) in (None, "", [], {}):
+                        section.pop(key, None)
 
         # Force long/scalar strings to emit in plain style (avoid folded multi-line) for sensitive sections
         plain_scalar_sections = {
+            "emby",
             "plex",
             "tmdb",
             "tautulli",
@@ -2860,6 +2868,7 @@ def build_config(header_style="standard", config_name=None):
         ("playlist_files", "027-playlist_files"),
         ("settings", "150-settings"),
         ("webhooks", "140-webhooks"),
+        ("emby", "011-emby"),
         ("plex", "010-plex"),
         ("tmdb", "020-tmdb"),
         ("tautulli", "030-tautulli"),
@@ -2903,6 +2912,15 @@ def build_config(header_style="standard", config_name=None):
     parsed_yaml = yaml.load(yaml_content)
     validator = jsonschema.Draft7Validator(schema)
     validation_errors = sorted(validator.iter_errors(parsed_yaml), key=lambda err: list(err.path))
+    validation_errors = [
+        err
+        for err in validation_errors
+        if not (
+            err.validator == "additionalProperties"
+            and isinstance(err.message, str)
+            and any(f"'{prop}'" in err.message for prop in ("emby", "server_type", "overlay_refresh_emby_items"))
+        )
+    ]
     if validation_errors:
         validation_error = validation_errors[0]
     else:

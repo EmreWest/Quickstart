@@ -45,6 +45,74 @@ def test_config_round_trip_all_steps(client, isolated_config_dir, monkeypatch, a
             assert _contains_dummy_field(data.get(source_name, {}), f"val-{source_name}")
 
 
+def test_emby_import_and_build_preserves_emby_config(client, isolated_config_dir, monkeypatch, app, qs_module):
+    from modules import database, importer
+
+    config_name = "pytest_emby_config"
+    parsed = {
+        "settings": {
+            "server_type": "emby",
+            "overlay_refresh_emby_items": True,
+            "overlay_artwork_filetype": "png",
+        },
+        "emby": {
+            "url": "http://emby.local:8096",
+            "api_key": "emby-key",
+            "user_id": "3",
+            "overlay_destination_folder": "/config/overlays",
+            "timeout": 60,
+            "verify_ssl": True,
+        },
+    }
+
+    payload, report = importer.prepare_import_payload(parsed, set(), set())
+
+    assert "emby" in payload
+    assert payload["emby"]["emby"]["api_key"] == "emby-key"
+    assert any(line.startswith("imported: emby") for line in report.lines)
+
+    with client.session_transaction() as sess:
+        sess["config_name"] = config_name
+
+    database.save_section_data(name=config_name, section="settings", validated=True, user_entered=True, data=payload["settings"])
+    database.save_section_data(name=config_name, section="emby", validated=True, user_entered=True, data=payload["emby"])
+
+    monkeypatch.setattr(qs_module.helpers, "ensure_json_schema", lambda: None)
+    monkeypatch.setattr(qs_module.helpers, "check_for_update", lambda: {"kometa_branch": "nightly", "branch": "pytest", "local_version": "pytest", "running_on": "pytest"})
+    monkeypatch.setattr(qs_module.helpers, "get_plex_summary", lambda: "Plex summary unavailable")
+    monkeypatch.setattr(qs_module.helpers, "get_quickstart_settings_summary", lambda: [])
+    monkeypatch.setattr(qs_module.helpers, "get_library_summaries", lambda _names: "")
+    monkeypatch.setattr(qs_module.persistence, "get_dummy_data", lambda _target: {})
+
+    import builtins
+
+    original_open = builtins.open
+
+    def fake_open(path, *args, **kwargs):
+        if str(path).endswith("config-schema.json"):
+            from io import StringIO
+
+            return StringIO("type: object\nadditionalProperties: true\n")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(qs_module.output, "open", fake_open, raising=False)
+
+    with app.test_request_context("/step/900-kometa"):
+        qs_module.session["config_name"] = config_name
+        validated, _validation_error, config_data, yaml_content, validation_errors = qs_module.output.build_config(
+            "none",
+            config_name=config_name,
+        )
+
+    assert validated is True
+    assert validation_errors == []
+    assert config_data["settings"]["settings"]["server_type"] == "emby"
+    assert config_data["emby"]["emby"]["api_key"] == "emby-key"
+    assert "server_type: emby" in yaml_content
+    assert "emby:" in yaml_content
+    assert "api_key: emby-key" in yaml_content
+
+
 def test_step_rejects_invalid_path_payload(client, isolated_config_dir):
     from modules import database
 

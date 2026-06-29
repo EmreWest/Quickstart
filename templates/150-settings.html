@@ -3,6 +3,19 @@
 {% include "modals/" + page_info['template_name'] + ".html" ignore missing %}
 <div id="validation-messages" class="alert alert-danger" role="alert" style="display: none;">
 </div>
+<div class="input-group mb-2">
+  <span class="input-group-text" id="server_type_text" style="width: 220px; justify-content: space-between;">
+    Media Server
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true"
+      title="Select which server type Kometa should use globally. Plex remains the default.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <select class="form-select" id="server_type" name="server_type" aria-describedby="server_type_text">
+    <option value="plex" {% if data['settings'].get('server_type', 'plex') == 'plex' %}selected{% endif %}>Plex</option>
+    <option value="emby" {% if data['settings'].get('server_type') == 'emby' %}selected{% endif %}>Emby</option>
+  </select>
+</div>
 <div class="form-floating mb-2">
   <div class="accordion" id="accordionExample">
     <div class="accordion-item">
@@ -175,6 +188,17 @@
 
           </div>
           <h6 class="fw-bold mt-3"><u>Overlay Settings</u></h6>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="overlay_refresh_emby_items"
+              name="overlay_refresh_emby_items" value="true" {% if
+              data['settings'].get('overlay_refresh_emby_items')|string|lower=='true' %}checked{% endif %}>
+            <input type="hidden" name="overlay_refresh_emby_items" value="false">
+            <label class="form-check-label" for="overlay_refresh_emby_items">
+              Refresh Emby Items After Overlays
+              <i class="bi bi-info-circle-fill text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true"
+                title="When using Emby, ask Kometa to refresh items after overlay images are generated so Emby can pick up the new artwork."></i>
+            </label>
+          </div>
           <div class="row mb-2">
             <div class="col-6">
               <div class="input-group">

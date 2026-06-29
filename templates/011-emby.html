@@ -1,0 +1,88 @@
+{% extends "000-base.html" %} {% block content %}
+{% include "001-navigation.html" %}
+{% include "modals/" + page_info['template_name'] + ".html" ignore missing %}
+<div class="input-group mb-2">
+  <span class="input-group-text" id="emby_url_text" style="width: 240px; justify-content: space-between;">
+    Emby URL
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true"
+      title="The direct URL Kometa should use to reach your Emby server, including the port.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="text" class="form-control" id="emby_url" name="emby_url"
+    value="{{ data['emby'].get('url', '') }}" aria-describedby="emby_url_text">
+</div>
+<div class="input-group mb-2">
+  <span class="input-group-text" id="emby_api_key_text" style="width: 240px; justify-content: space-between;">
+    Emby API Key
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true"
+      title="Create an API key in the Emby dashboard for Kometa.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="password" class="form-control" id="emby_api_key" name="emby_api_key"
+    value="{{ data['emby'].get('api_key', '') }}" aria-describedby="emby_api_key_text">
+  <button class="btn btn-outline-secondary" id="toggleEmbyApiKeyVisibility" type="button">
+    <i class="fas fa-eye"></i>
+  </button>
+</div>
+<div class="input-group mb-2">
+  <span class="input-group-text" id="emby_user_id_text" style="width: 240px; justify-content: space-between;">
+    Emby User ID
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true"
+      title="Use the internal Emby user ID, not the username. It appears in the Emby user edit URL as userId.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="text" class="form-control" id="emby_user_id" name="emby_user_id"
+    value="{{ data['emby'].get('user_id', '') }}" aria-describedby="emby_user_id_text">
+  <button class="btn btn-success" id="validateEmbyButton" type="button">
+    Validate <i id="spinner_validate_emby" class="spinner-border spinner-border-sm" style="display:none;"></i>
+  </button>
+</div>
+<div class="input-group mb-2">
+  <span class="input-group-text" id="emby_overlay_destination_folder_text"
+    style="width: 240px; justify-content: space-between;">
+    Overlay Destination Folder
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true"
+      title="Required for overlays. This folder must be shared with the Emby overlay plugin.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="text" class="form-control" id="emby_overlay_destination_folder"
+    name="emby_overlay_destination_folder" data-path-rule="emby_overlay_destination_folder"
+    value="{{ data['emby'].get('overlay_destination_folder', '') }}"
+    aria-describedby="emby_overlay_destination_folder_text">
+</div>
+<div class="row">
+  <div class="col-md-6">
+    <div class="input-group mb-2">
+      <span class="input-group-text" style="width: 240px;">Timeout (seconds)</span>
+      <input type="number" class="form-control" id="emby_timeout" name="emby_timeout" min="1"
+        value="{{ data['emby'].get('timeout', 60) }}">
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="input-group mb-2">
+      <span class="input-group-text" style="width: 240px;">Database Cache (MB)</span>
+      <input type="number" class="form-control" id="emby_db_cache" name="emby_db_cache" min="1"
+        value="{{ data['emby'].get('db_cache', '') }}">
+    </div>
+  </div>
+</div>
+<div class="form-check form-switch">
+  <input class="form-check-input" type="checkbox" name="emby_verify_ssl" id="emby_verify_ssl" value="true" {% if
+    data['emby'].get('verify_ssl', true)|string|lower=='true' %}checked{% endif %}>
+  <input type="hidden" name="emby_verify_ssl" value="false">
+  <label class="form-check-label" for="emby_verify_ssl">Verify SSL</label>
+</div>
+<div class="mt-2">
+  <div id="embyStatusMessage" class="status-message mb-2"></div>
+</div>
+<div class="form-floating" style="display:none;">
+  <input type="text" class="form-control" id="emby_validated" name="emby_validated" value="{{ data['validated'] }}">
+  <label for="emby_validated">Emby Validated</label>
+</div>
+<input type="hidden" id="emby_validated_at" name="emby_validated_at" value="{{ data.get('validated_at', '') }}">
+</form>
+{% endblock %}

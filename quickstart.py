@@ -143,6 +143,7 @@ VALIDATION_DOC_FALLBACK = "/step/900-kometa"
 VALIDATION_DOCS = {
     "settings": f"{VALIDATION_DOC_BASE}150-settings",
     "libraries": f"{VALIDATION_DOC_BASE}025-libraries",
+    "emby": f"{VALIDATION_DOC_BASE}011-emby",
     "plex": f"{VALIDATION_DOC_BASE}010-plex",
     "tmdb": f"{VALIDATION_DOC_BASE}020-tmdb",
     "trakt": f"{VALIDATION_DOC_BASE}130-trakt",
@@ -165,6 +166,7 @@ VALIDATION_DOCS = {
 }
 VALIDATION_REASON_LABELS = {
     "missing_credentials": "Missing credentials",
+    "missing_emby_validation": "Emby not validated",
     "missing_plex_validation": "Plex not validated",
     "no_libraries": "No libraries selected",
     "invalid_paths": "Invalid paths",
@@ -365,6 +367,7 @@ QS_REQUIRED_STEP_KEYS = ["001-start", "010-plex", "020-tmdb", "025-libraries", "
 QS_REVIEW_STEP_KEYS = ["900-kometa", "905-analytics", "910-sponsor", "915-imagemaid"]
 QS_VALIDATION_STEP_KEYS = {
     "010-plex",
+    "011-emby",
     "020-tmdb",
     "025-libraries",
     "030-tautulli",
@@ -393,6 +396,7 @@ QS_WARN_REASONS = {
     "no_webhooks",
 }
 QS_ERROR_REASONS = {
+    "missing_emby_validation",
     "missing_plex_validation",
     "token_invalid",
     "account_locked",
@@ -1540,7 +1544,15 @@ def _build_workspace_status_context(config_name, template_list, available_config
     available_set = set(available_configs or [])
     config_exists = bool(config_name) and (config_name in available_set or bool(section_rows))
 
+    settings_row = section_rows.get("settings") if isinstance(section_rows, dict) else None
+    settings_payload = settings_row.get("data") if isinstance(settings_row, dict) else {}
+    settings_section = settings_payload.get("settings", {}) if isinstance(settings_payload, dict) else {}
+    server_type = str(settings_section.get("server_type") or "plex").strip().lower()
+
     required_seed = set(QS_REQUIRED_STEP_KEYS)
+    if server_type == "emby" and "011-emby" in template_keys:
+        required_seed.discard("010-plex")
+        required_seed.add("011-emby")
     tautulli_requirement_reasons = _config_tautulli_dependency_reasons(section_rows) if QS_TAUTULLI_REQUIRED_STEP_KEY in template_keys else []
     omdb_requirement_reasons = _config_omdb_dependency_reasons(section_rows) if QS_OMDB_REQUIRED_STEP_KEY in template_keys else []
     mdblist_requirement_reasons = _config_mdblist_dependency_reasons(section_rows) if QS_MDBLIST_REQUIRED_STEP_KEY in template_keys else []
@@ -7437,6 +7449,12 @@ def validate_plex():
     return jsonify(merged)
 
 
+@app.route("/validate_emby", methods=["POST"])
+def validate_emby():
+    data = request.get_json(silent=True) or {}
+    return validations.validate_emby_server(data)
+
+
 @app.route("/path-validation-rules", methods=["GET"])
 def path_validation_rules():
     rules = path_validation.load_rules()
@@ -7908,6 +7926,17 @@ def validate_all_services():
             lambda s: {"plex_url": s.get("plex", {}).get("url"), "plex_token": s.get("plex", {}).get("token")},
             ["plex_url", "plex_token"],
         ),
+        (
+            "011-emby",
+            "emby",
+            validations.validate_emby_server,
+            lambda s: {
+                "emby_url": s.get("emby", {}).get("url"),
+                "emby_api_key": s.get("emby", {}).get("api_key"),
+                "emby_user_id": s.get("emby", {}).get("user_id"),
+            },
+            ["emby_url", "emby_api_key", "emby_user_id"],
+        ),
         ("020-tmdb", "tmdb", validations.validate_tmdb_server, lambda s: {"tmdb_apikey": s.get("tmdb", {}).get("apikey")}, ["tmdb_apikey"]),
         (
             "030-tautulli",
@@ -8101,10 +8130,19 @@ def validate_all_services():
         summary["skipped"] += 1
 
     # Bulk validation for libraries
-    plex_settings = persistence.retrieve_settings("010-plex") or {}
-    plex_is_valid = helpers.booler(plex_settings.get("validated", False)) if isinstance(plex_settings, dict) else False
-    if not plex_is_valid:
-        skip_section_validation("025-libraries", "libraries", reason="missing_plex_validation")
+    emby_settings = persistence.retrieve_settings("011-emby") or {}
+    settings_settings = persistence.retrieve_settings("150-settings") or {}
+    settings_section = settings_settings.get("settings", {}) if isinstance(settings_settings, dict) else {}
+    server_type = str(settings_section.get("server_type") or "plex").strip().lower()
+    if server_type == "emby":
+        server_is_valid = helpers.booler(emby_settings.get("validated", False)) if isinstance(emby_settings, dict) else False
+        missing_server_reason = "missing_emby_validation"
+    else:
+        plex_settings = persistence.retrieve_settings("010-plex") or {}
+        server_is_valid = helpers.booler(plex_settings.get("validated", False)) if isinstance(plex_settings, dict) else False
+        missing_server_reason = "missing_plex_validation"
+    if not server_is_valid:
+        skip_section_validation("025-libraries", "libraries", reason=missing_server_reason)
     else:
         libraries_settings = persistence.retrieve_settings("025-libraries") or {}
         libraries_data = libraries_settings.get("libraries", {}) if isinstance(libraries_settings, dict) else {}
@@ -8319,6 +8357,7 @@ def validate_all_services():
 
     reason_labels = {
         "missing_credentials": "Missing credentials",
+        "missing_emby_validation": "Emby not validated",
         "missing_plex_validation": "Plex not validated",
         "no_libraries": "No libraries selected",
         "invalid_paths": "Invalid paths",
