@@ -922,6 +922,30 @@ def validate_omdb_server(data):
         return jsonify({"valid": False, "message": str(e)})
 
 
+def validate_tvdb_server(data):
+    api_key = data.get("tvdb_apikey")
+    pin = data.get("tvdb_pin")
+
+    payload = {"apikey": api_key}
+    if pin:
+        payload["pin"] = pin
+
+    try:
+        response = requests.post("https://api4.thetvdb.com/v4/login", json=payload, timeout=10)
+        if response.status_code == 200 and response.json().get("data", {}).get("token"):
+            return jsonify({"valid": True, "message": "TVDb API key is valid!"})
+        message = "Invalid TVDb API key"
+        try:
+            message = response.json().get("message") or message
+        except ValueError:
+            pass
+        return jsonify({"valid": False, "message": message})
+    except Exception as e:
+        helpers.ts_log(f"Error validating TVDb connection: {e}", level="ERROR")
+        flash(f"Invalid TVDb API Key: {str(e)}", "error")
+        return jsonify({"valid": False, "message": str(e)})
+
+
 def validate_github_server(data):
     github_token = data.get("github_token")
 

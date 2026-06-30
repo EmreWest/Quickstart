@@ -22,6 +22,7 @@ This fork keeps the original Kometa Quickstart workflow, but adds support for th
 - **Emby setup page:** Quickstart includes a Web GUI page for Emby URL, API key, user ID, overlay destination folder, timeout, database cache, and SSL verification.
 - **Emby server mode:** Settings now include `server_type`, so generated configs can emit `settings.server_type: emby`.
 - **Emby overlay settings:** Settings expose Emby-related overlay options such as `overlay_refresh_emby_items` and support Emby-friendly overlay artwork output like `png`.
+- **TVDb setup page:** Quickstart includes an optional TVDb page that writes Kometa's `tvdb:` block with `apikey`, optional `pin`, `language`, and `cache_expiration`.
 - **Validation/readiness changes:** When `server_type` is set to `emby`, Quickstart treats Emby credentials as the required media server setup instead of Plex.
 
 The upstream Quickstart project remains Plex-first. This fork is intended for testing and using Kometa configurations that target Emby support.

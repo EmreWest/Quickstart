@@ -133,6 +133,7 @@ def clean_form_data(form_data):
     cache_defaults = {
         "cache_expiration": "60",
         "tmdb_cache_expiration": "60",
+        "tvdb_cache_expiration": "60",
         "omdb_cache_expiration": "60",
         "mdblist_cache_expiration": "60",
         "anidb_cache_expiration": "60",

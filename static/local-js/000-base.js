@@ -1180,6 +1180,7 @@ function qsCurrentStepHasMeaningfulInput () {
     '030-tautulli': ['tautulli_url', 'tautulli_apikey'],
     '040-github': ['github_token'],
     '050-omdb': ['omdb_apikey'],
+    '055-tvdb': ['tvdb_apikey'],
     '060-mdblist': ['mdblist_apikey'],
     '070-notifiarr': ['notifiarr_apikey'],
     '080-gotify': ['gotify_url', 'gotify_token'],
@@ -2250,6 +2251,7 @@ function setupValidationCallouts () {
 
 const CACHE_EXPIRATION_FIELDS = [
   { id: 'tmdb_cache_expiration', label: 'TMDb cache expiration' },
+  { id: 'tvdb_cache_expiration', label: 'TVDb cache expiration' },
   { id: 'omdb_cache_expiration', label: 'OMDb cache expiration' },
   { id: 'mdblist_cache_expiration', label: 'MDBList cache expiration' },
   { id: 'anidb_cache_expiration', label: 'AniDB cache expiration' },

@@ -670,6 +670,8 @@ def belongs_in_template_list(file):
 def user_visible_name(raw_name):
     if raw_name == "tmdb":
         formatted_name = "TMDb"
+    elif raw_name == "tvdb":
+        formatted_name = "TVDb"
     elif raw_name == "omdb":
         formatted_name = "OMDb"
     elif raw_name == "github":

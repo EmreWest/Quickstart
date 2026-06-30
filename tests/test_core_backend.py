@@ -113,6 +113,68 @@ def test_emby_import_and_build_preserves_emby_config(client, isolated_config_dir
     assert "api_key: emby-key" in yaml_content
 
 
+def test_tvdb_import_and_build_preserves_tvdb_config(client, isolated_config_dir, monkeypatch, app, qs_module):
+    from modules import database, importer
+
+    config_name = "pytest_tvdb_config"
+    parsed = {
+        "tvdb": {
+            "apikey": "tvdb-key",
+            "pin": "1234",
+            "cache_expiration": 60,
+            "language": "eng",
+        },
+    }
+
+    payload, report = importer.prepare_import_payload(parsed, set(), set())
+
+    assert "tvdb" in payload
+    assert payload["tvdb"]["tvdb"]["apikey"] == "tvdb-key"
+    assert payload["tvdb"]["tvdb"]["pin"] == "1234"
+    assert any(line.startswith("imported: tvdb") for line in report.lines)
+
+    with client.session_transaction() as sess:
+        sess["config_name"] = config_name
+
+    database.save_section_data(name=config_name, section="tvdb", validated=True, user_entered=True, data=payload["tvdb"])
+
+    monkeypatch.setattr(qs_module.helpers, "ensure_json_schema", lambda: None)
+    monkeypatch.setattr(qs_module.helpers, "check_for_update", lambda: {"kometa_branch": "nightly", "branch": "pytest", "local_version": "pytest", "running_on": "pytest"})
+    monkeypatch.setattr(qs_module.helpers, "get_plex_summary", lambda: "Plex summary unavailable")
+    monkeypatch.setattr(qs_module.helpers, "get_quickstart_settings_summary", lambda: [])
+    monkeypatch.setattr(qs_module.helpers, "get_library_summaries", lambda _names: "")
+    monkeypatch.setattr(qs_module.persistence, "get_dummy_data", lambda _target: {})
+
+    import builtins
+
+    original_open = builtins.open
+
+    def fake_open(path, *args, **kwargs):
+        if str(path).endswith("config-schema.json"):
+            from io import StringIO
+
+            return StringIO("type: object\nadditionalProperties: true\n")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(qs_module.output, "open", fake_open, raising=False)
+
+    with app.test_request_context("/step/900-kometa"):
+        qs_module.session["config_name"] = config_name
+        validated, _validation_error, config_data, yaml_content, validation_errors = qs_module.output.build_config(
+            "none",
+            config_name=config_name,
+        )
+
+    assert validated is True
+    assert validation_errors == []
+    assert config_data["tvdb"]["tvdb"]["apikey"] == "tvdb-key"
+    assert config_data["tvdb"]["tvdb"]["pin"] == "1234"
+    assert "tvdb:" in yaml_content
+    assert "apikey: tvdb-key" in yaml_content
+    assert "pin: '1234'" in yaml_content or "pin: 1234" in yaml_content
+    assert "language: eng" in yaml_content
+
+
 def test_step_rejects_invalid_path_payload(client, isolated_config_dir):
     from modules import database
 

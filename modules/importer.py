@@ -10,6 +10,7 @@ SIMPLE_SECTIONS = {
     "emby",
     "plex",
     "tmdb",
+    "tvdb",
     "omdb",
     "mdblist",
     "tautulli",

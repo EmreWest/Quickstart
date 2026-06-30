@@ -2702,6 +2702,7 @@ def build_config(header_style="standard", config_name=None):
                     "emby",
                     "plex",
                     "tmdb",
+                    "tvdb",
                     "tautulli",
                     "github",
                     "omdb",
@@ -2741,6 +2742,7 @@ def build_config(header_style="standard", config_name=None):
             "emby",
             "plex",
             "tmdb",
+            "tvdb",
             "tautulli",
             "github",
             "omdb",
@@ -2871,6 +2873,7 @@ def build_config(header_style="standard", config_name=None):
         ("emby", "011-emby"),
         ("plex", "010-plex"),
         ("tmdb", "020-tmdb"),
+        ("tvdb", "055-tvdb"),
         ("tautulli", "030-tautulli"),
         ("github", "040-github"),
         ("omdb", "050-omdb"),
@@ -2918,7 +2921,7 @@ def build_config(header_style="standard", config_name=None):
         if not (
             err.validator == "additionalProperties"
             and isinstance(err.message, str)
-            and any(f"'{prop}'" in err.message for prop in ("emby", "server_type", "overlay_refresh_emby_items"))
+            and any(f"'{prop}'" in err.message for prop in ("emby", "tvdb", "server_type", "overlay_refresh_emby_items"))
         )
     ]
     if validation_errors:

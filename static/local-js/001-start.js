@@ -1885,6 +1885,7 @@ document.addEventListener('DOMContentLoaded', function () {
           '030-tautulli': 'Tautulli',
           '040-github': 'GitHub',
           '050-omdb': 'OMDb',
+          '055-tvdb': 'TVDb',
           '060-mdblist': 'MDBList',
           '070-notifiarr': 'Notifiarr',
           '080-gotify': 'Gotify',

@@ -146,6 +146,7 @@ VALIDATION_DOCS = {
     "emby": f"{VALIDATION_DOC_BASE}011-emby",
     "plex": f"{VALIDATION_DOC_BASE}010-plex",
     "tmdb": f"{VALIDATION_DOC_BASE}020-tmdb",
+    "tvdb": f"{VALIDATION_DOC_BASE}055-tvdb",
     "trakt": f"{VALIDATION_DOC_BASE}130-trakt",
     "radarr": f"{VALIDATION_DOC_BASE}110-radarr",
     "sonarr": f"{VALIDATION_DOC_BASE}120-sonarr",
@@ -373,6 +374,7 @@ QS_VALIDATION_STEP_KEYS = {
     "030-tautulli",
     "040-github",
     "050-omdb",
+    "055-tvdb",
     "060-mdblist",
     "070-notifiarr",
     "080-gotify",
@@ -1377,6 +1379,7 @@ def _has_meaningful_optional_input(template_key, payload):
         "030-tautulli": ("tautulli", ("url", "apikey")),
         "040-github": ("github", ("token",)),
         "050-omdb": ("omdb", ("apikey",)),
+        "055-tvdb": ("tvdb", ("apikey",)),
         "060-mdblist": ("mdblist", ("apikey",)),
         "070-notifiarr": ("notifiarr", ("apikey",)),
         "080-gotify": ("gotify", ("url", "token")),
@@ -6436,6 +6439,7 @@ def step(name):
             ("010-plex", "plex"),
             ("020-tmdb", "tmdb"),
             ("050-omdb", "omdb"),
+            ("055-tvdb", "tvdb"),
             ("060-mdblist", "mdblist"),
             ("100-anidb", "anidb"),
             ("130-trakt", "trakt"),
@@ -7825,6 +7829,17 @@ def validate_omdb():
         return jsonify(result.get_json()), 400
 
 
+@app.route("/validate_tvdb", methods=["POST"])
+def validate_tvdb():
+    data = request.json
+    result = validations.validate_tvdb_server(data)
+
+    if result.get_json().get("valid"):
+        return jsonify(result.get_json())
+    else:
+        return jsonify(result.get_json()), 400
+
+
 @app.route("/validate_github", methods=["POST"])
 def validate_github():
     data = request.json
@@ -7947,6 +7962,13 @@ def validate_all_services():
         ),
         ("040-github", "github", validations.validate_github_server, lambda s: {"github_token": s.get("github", {}).get("token")}, ["github_token"]),
         ("050-omdb", "omdb", validations.validate_omdb_server, lambda s: {"omdb_apikey": s.get("omdb", {}).get("apikey")}, ["omdb_apikey"]),
+        (
+            "055-tvdb",
+            "tvdb",
+            validations.validate_tvdb_server,
+            lambda s: {"tvdb_apikey": s.get("tvdb", {}).get("apikey"), "tvdb_pin": s.get("tvdb", {}).get("pin")},
+            ["tvdb_apikey"],
+        ),
         ("060-mdblist", "mdblist", validations.validate_mdblist_server, lambda s: {"mdblist_apikey": s.get("mdblist", {}).get("apikey")}, ["mdblist_apikey"]),
         ("070-notifiarr", "notifiarr", validations.validate_notifiarr_server, lambda s: {"notifiarr_apikey": s.get("notifiarr", {}).get("apikey")}, ["notifiarr_apikey"]),
         (

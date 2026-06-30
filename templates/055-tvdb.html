@@ -1,0 +1,74 @@
+{% extends "000-base.html" %} {% block content %}
+{% include "001-navigation.html" %}
+{% include "modals/" + page_info['template_name'] + ".html" ignore missing %}
+<div class="input-group mb-2">
+  <span class="input-group-text" id="tvdb_apikey_text" style="width: 238px; justify-content: space-between;">
+    TVDb API Key
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true" style="margin-left: 10px;"
+      title="Enter your TVDb API Key to allow Kometa to authenticate with TVDb.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="password" class="form-control" id="tvdb_apikey" name="tvdb_apikey"
+    value="{{ data['tvdb']['apikey'] | string if data['tvdb']['apikey'] and 'Enter TVDb API Key' not in data['tvdb']['apikey'] | string else '' }}"
+    aria-describedby="tvdb_apikey_text">
+  <button class="btn btn-outline-secondary" id="toggleApikeyVisibility" type="button">
+    <i class="fas fa-eye"></i>
+  </button>
+  <button class="btn btn-success" id="validateButton" type="button">
+    Validate <i id="spinner_validate" class="spinner-border spinner-border-sm" style="display:none;"></i>
+  </button>
+</div>
+
+<div class="input-group mb-2">
+  <span class="input-group-text" id="tvdb_pin_text" style="width: 238px; justify-content: space-between;">
+    TVDb PIN
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true" style="margin-left: 10px;"
+      title="Enter your TVDb PIN if your TVDb API key requires one.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="password" class="form-control" id="tvdb_pin" name="tvdb_pin"
+    value="{{ data['tvdb']['pin'] | string if data['tvdb']['pin'] else '' }}"
+    aria-describedby="tvdb_pin_text">
+  <button class="btn btn-outline-secondary" id="togglePinVisibility" type="button">
+    <i class="fas fa-eye"></i>
+  </button>
+</div>
+
+<div class="form-floating" style="display:none;">
+  <input type="text" class="form-control" id="tvdb_validated" name="tvdb_validated" value="{{ data['validated'] }}" title="">
+  <label for="tvdb_validated">TVDb Validated</label>
+</div>
+<input type="hidden" id="tvdb_validated_at" name="tvdb_validated_at" value="{{ data.get('validated_at', '') }}">
+<div id="statusMessage" class="status-message mb-2"></div>
+
+<div class="input-group mb-2">
+  <span class="input-group-text" id="tvdb_language_text" style="width: 238px; justify-content: space-between;">
+    Language
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true" style="margin-left: 10px;"
+      title="Set the TVDb language code Kometa should use for TVDb requests.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="text" class="form-control" id="tvdb_language" name="tvdb_language"
+    value="{{ data['tvdb']['language'] | string if data['tvdb']['language'] else 'eng' }}"
+    data-default-value="eng" aria-describedby="tvdb_language_text">
+</div>
+
+<div class="input-group mb-2">
+  <span class="input-group-text" id="tvdb_cache_expiration_text" style="width: 238px; justify-content: space-between;">
+    Cache Expiration (in days)
+    <span class="text-info ms-3" data-bs-toggle="tooltip" data-bs-html="true" style="margin-left: 10px;"
+      title="Set the number of days the TVDb cache should be stored before it expires.">
+      <i class="bi bi-info-circle-fill"></i>
+    </span>
+  </span>
+  <input type="number" class="form-control" id="tvdb_cache_expiration" name="tvdb_cache_expiration"
+    value="{{ data['tvdb']['cache_expiration'] }}" min="1" data-default-value="60"
+    aria-describedby="tvdb_cache_expiration_text">
+</div>
+
+</div>
+</form>
+{% endblock %}
